@@ -1,4 +1,4 @@
-package com.carmotors.servicios.dominio;
+package com.carmotors.servicios.taller.dominio;
 
 /**
  * Identificador lógico de una orden de servicio.
