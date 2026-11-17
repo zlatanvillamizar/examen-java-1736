@@ -8,13 +8,13 @@
 
 ## Contrato Java
 
-Servicios depende de `InventarioServiciosPort`, que expone tres intenciones:
+`InventarioServiciosPort` define tres intenciones para la futura integración:
 
 - `reservar(ReservaRepuesto)`: solicita apartar una cantidad positiva para una orden.
 - `consumir(ConsumoRepuesto)`: confirma que una cantidad positiva reservada fue utilizada.
 - `liberar(ReservaRepuesto)`: devuelve al inventario una cantidad reservada que ya no será utilizada.
 
-La implementación concreta del puerto pertenece a Inventario.
+La implementación concreta del puerto pertenece a Inventario. En esta etapa el puerto queda definido como contrato, sin adaptador conectado a `ServicioService`.
 
 ## Reglas acordadas
 
@@ -36,5 +36,7 @@ El contrato separa responsabilidades, pero una operación real afecta tanto el r
 - Reserva: Servicios valida la orden → solicita reserva a Inventario → registra/actualiza `cantidad_reservada`.
 - Consumo: Servicios valida la orden → solicita consumo a Inventario → incrementa `cantidad_usada` y ajusta la reserva pendiente.
 - Liberación/cancelación: Servicios solicita liberación a Inventario → reduce la reserva pendiente; no altera lo ya consumido.
+
+La reserva pendiente es el saldo de unidades reservadas aún disponibles para consumo o liberación. Antes de implementar las actualizaciones hay que acordar si `cantidad_reservada` almacena ese saldo o un total acumulado, según [los contratos pendientes](contratos-pendientes.md). Por ejemplo, si se reservaron cinco unidades, se usaron tres y se liberan las dos restantes, el saldo queda en cero y `cantidad_usada` permanece en tres.
 
 Hasta que el adaptador transaccional esté implementado, `ServicioControlador` no expone operaciones de repuestos. Esto evita presentar a la futura vista una operación que todavía no puede garantizar atomicidad.
