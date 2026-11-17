@@ -1,49 +1,61 @@
-# Contratos pendientes — módulo Servicios (recuperación de tarea 14/11/2026)
+# Contratos del módulo de servicios
 
-Este documento se elaboró el 17/11/2026 para recuperar el trabajo planificado el sábado 14. **No es el DER aprobado**. Issues: #1, #16, #19.
+El DER compartido para esta revisión confirma las columnas, los tipos, las claves y las relaciones de la siguiente tabla. Las decisiones de implementación se describen más abajo.
 
-## Tablas a cargo y dependencias
-
-| Tabla | Dependencia confirmada por el reparto | Columnas y restricciones |
+| Tabla | Columnas y tipos confirmados | PK y FK confirmadas |
 | --- | --- | --- |
-| `servicio_estados` | Catálogo de estados | Pendiente de DER |
-| `mantenimiento_tipos` | Catálogo de tipos | Pendiente de DER |
-| `tecnicos` | Entidad independiente | Pendiente de DER |
-| `servicios` | `vehiculos`; catálogos según DER | Pendiente de DER |
-| `servicios_repuestos` | `servicios` y `repuestos` | Pendiente de DER |
-| `servicios_tecnicos` | `servicios` y `tecnicos` | Pendiente de DER |
+| `servicio_estados` | `id INT`, `nombre VARCHAR(100)` | PK `id` |
+| `mantenimiento_tipos` | `id INT`, `nombre VARCHAR(100)` | PK `id` |
+| `tecnicos` | `id INT`, `nombre VARCHAR(255)`, `especialidad VARCHAR(100)`, `activo BOOLEAN` | PK `id` |
+| `servicios` | `id INT`, `vehiculo_id INT`, `mantenimiento_tipo_id INT`, `fecha_recepcion DATETIME`, `fecha_entrega DATETIME`, `descripcion_problema TEXT`, `costo_mano_obra DECIMAL(10,2)`, `estado_id INT` | PK `id`. FK `vehiculo_id → vehiculos.id`, `mantenimiento_tipo_id → mantenimiento_tipos.id`, `estado_id → servicio_estados.id`. |
+| `servicios_repuestos` | `servicio_id INT`, `repuesto_id INT`, `cantidad_reservada INT`, `cantidad_usada INT`, `precio_unitario_venta DECIMAL(10,2)` | PK `(servicio_id, repuesto_id)`. FK `servicio_id → servicios.id`, `repuesto_id → repuestos.id`. |
+| `servicios_tecnicos` | `servicio_id INT`, `tecnico_id INT`, `fecha_asignacion DATETIME` | PK `(servicio_id, tecnico_id)`. FK `servicio_id → servicios.id`, `tecnico_id → tecnicos.id`. |
 
-## Contratos externos conocidos
+Cada FK representa una relación 1:N desde la tabla referenciada hacia la tabla que contiene la FK.
 
-- `feature/clientes-database` y `main` declaran `clientes.id INT AUTO_INCREMENT PRIMARY KEY` en `database/bloques/clientes.sql`. El bloque también crea `recordatorios_mantenimiento` con una FK a `vehiculos(id)` y luego agrega otra a `servicios(id)`.
-- `feature/vehiculos-database` (PR #12) declara `vehiculos.id INT AUTO_INCREMENT PRIMARY KEY` y `vehiculos.cliente_id INT NOT NULL` con FK a `clientes(id)`. El bloque de vehículos está vacío en `main` y `develop`.
-- `feature/repuestos-database` y `main` declaran `repuestos.id INT NOT NULL AUTO_INCREMENT` como PK en `database/bloques/inventario.sql` (PR #18). Los identificadores de las tres tablas usan `INT` con signo. Los tres bloques de dependencias están vacíos en `develop` y en la rama de servicios revisada.
+## Decisiones de implementación aprobadas
 
-## Borrador SQL local
+El DER no especifica explícitamente `AUTO_INCREMENT`, `NOT NULL`, `NULL`, `UNIQUE`, `DEFAULT` ni `CHECK`.
 
-El borrador de las seis tablas quedó en el commit local `5e42265` de `backup-trabajo-local-17nov`. Sus FK a `vehiculos(id)` y `repuestos(id)` coinciden en tipo con los scripts revisados. El bloque de servicios de la rama de trabajo sigue vacío hasta cotejar el borrador con el DER.
-
-| Tabla | Qué cotejar en el borrador |
+| Decisión | Justificación |
 | --- | --- |
-| `servicio_estados` | ID, nombre único y valores permitidos. |
-| `mantenimiento_tipos` | ID, nombre único, descripción y nulabilidad. |
-| `tecnicos` | ID, nombre, especialidad y valor inicial de activo. |
-| `servicios` | PK, FK a vehículo y catálogos, obligatoriedad, fechas, descripción y costo de mano de obra. |
-| `servicios_repuestos` | PK compuesta, cardinalidad, tipos y límites de cantidades, precio unitario y comportamiento en reserva, consumo, cancelación y devolución. |
-| `servicios_tecnicos` | PK compuesta, cardinalidad, fecha de asignación y precisión y límites de horas trabajadas. |
+| `AUTO_INCREMENT` en los cuatro identificadores simples. | Sigue la convención de clientes, vehículos e inventario y permite que MySQL genere sus identificadores. Las tablas puente usan las claves de las filas relacionadas. |
+| Nombres de catálogo con `NOT NULL UNIQUE`. Nombre del técnico y las tres FK de `servicios` con `NOT NULL`. | Los catálogos requieren nombres únicos. Cada técnico tiene un nombre y cada orden tiene un vehículo, un tipo de mantenimiento y un estado. |
+| `NOT NULL` implícito en las PK. | MySQL lo aplica a las PK simples y a ambas columnas de cada PK compuesta. La unicidad de las PK proviene de las claves confirmadas. |
+| `tecnicos.activo BOOLEAN NOT NULL DEFAULT TRUE` y `CHECK (activo IN (0, 1))`. | Todo técnico tiene un estado booleano y las altas quedan activas por defecto. |
+| `fecha_recepcion` y `fecha_asignacion` con `NOT NULL` y sin `DEFAULT`. | Java registra las fechas efectivas de ambos eventos. |
+| `fecha_entrega` admite `NULL`. Si se informa, debe ser igual o posterior a `fecha_recepcion`. | Una orden abierta puede seguir pendiente de entrega. |
+| `descripcion_problema NOT NULL`. `costo_mano_obra` admite `NULL` y se valida con `CHECK (costo_mano_obra >= 0)`. | Se registra el motivo de ingreso. Un costo pendiente se representa con `NULL` y un costo confirmado de cero se registra como `0.00`. |
+| Ambas cantidades con `NOT NULL DEFAULT 0` y un `CHECK >= 0` por columna. Precio unitario con `NOT NULL`, sin `DEFAULT` y con `CHECK >= 0`. | Una línea puede empezar sin reserva ni consumo. Cada línea registra explícitamente su precio y los valores negativos se rechazan. |
+| `ENGINE=InnoDB` en las seis tablas. | Hace explícito el motor que aplicará las FK y sigue la convención de inventario. Las FK usan las acciones referenciales predeterminadas de MySQL, que impiden borrar o cambiar una clave referenciada mientras haya filas dependientes. |
 
-## Decisiones que debe aprobar el equipo
+Los `CHECK`, incluido el de `activo`, requieren MySQL 8.0.16 o posterior. Inventario ya usa `CHECK` y el repositorio no fija la versión del servidor. Confirmar la versión antes de ejecutar el bloque.
 
-1. Columnas, tipos, índices, PK, FK, UNIQUE y nulabilidad de cada tabla.
-2. Si `servicios.id` es `INT`, compatible con la FK propuesta por recordatorios.
-3. Confirmación del identificador `repuestos.id INT` propuesto por Valeria y política de stock.
-4. Significado exacto de `cantidad_reservada` y `cantidad_usada`: reserva, consumo, cancelación, devolución y concurrencia.
-5. Estados de servicio permitidos y transiciones válidas.
+## Responsabilidades de Java
 
-## Orden de integración propuesto (pendiente de confirmación)
+- Quitar espacios innecesarios de los nombres e impedir descripciones vacías.
+- Validar las transiciones de estado y exigir `fecha_entrega` cuando la orden se entregue.
+- Validar la disponibilidad y coordinar la reserva, el consumo y la devolución de inventario mediante transacciones.
+- Determinar cuándo debe informarse `costo_mano_obra`.
+- Proporcionar explícitamente las fechas efectivas de `fecha_recepcion` y `fecha_asignacion`.
 
-Crear primero solo la tabla `clientes` del bloque de clientes. Crear `vehiculos`, los catálogos de servicios y `tecnicos` antes de `servicios`. Ejecutar inventario antes de crear `servicios_repuestos` y crear `servicios_tecnicos` después de sus dos tablas destino. Crear `recordatorios_mantenimiento` y aplicar su `ALTER TABLE` cuando ya existan `vehiculos` y `servicios`.
+Queda pendiente definir si `cantidad_reservada` es un saldo o un total acumulado. Hasta confirmarlo, cada cantidad se valida por separado. También quedan por definir el catálogo de estados, sus transiciones y las reglas de inventario para cancelación y concurrencia.
 
-## Alcance de la recuperación
+## Diferencias con el borrador `5e42265`
 
-Se puede desarrollar un contrato Java sin esquema físico, pero **no** crear DDL definitivo ni implementar consultas JDBC hasta que se apruebe el DER. No se han ejecutado pruebas MySQL de este documento.
+- `servicio_estados.nombre` pasa de `VARCHAR(30)` a `VARCHAR(100)`.
+- `mantenimiento_tipos.descripcion` se omite y `tecnicos.nombre` pasa de `VARCHAR(100)` a `VARCHAR(255)`.
+- `servicios.descripcion_problema` pasa de `VARCHAR(500)` a `TEXT` y `servicios_tecnicos.horas_trabajadas` se omite.
+- Se conservan `UNIQUE` en ambos catálogos, el valor inicial de activo y los ceros iniciales de las cantidades. Se eliminan los valores por defecto de las fechas de recepción y asignación y del costo de mano de obra. El costo admite `NULL`.
+- Se agregan `CHECK` para activo, cronología de entrega, costo, cantidades y precio.
+- Las tablas puente conservan la PK compuesta y su nulabilidad implícita. Se indica InnoDB en las seis tablas.
+
+## Orden de creación y dependencias externas
+
+1. Crear `clientes` antes de `vehiculos`. El script de vehículos del PR #12 declara `vehiculos.id INT` como PK. Crear `repuestos` mediante el bloque de inventario, que declara `repuestos.id INT` como PK. Ambas PK externas usan `INT` con signo. Verificar que ambas tablas existan en el esquema seleccionado antes de ejecutar el bloque completo de servicios.
+2. Crear `servicio_estados`, `mantenimiento_tipos` y `tecnicos` en cualquier orden.
+3. Crear `servicios` cuando existan `vehiculos` y sus dos catálogos.
+4. Crear `servicios_repuestos` cuando existan `servicios` y `repuestos`. Crear `servicios_tecnicos` cuando existan `servicios` y `tecnicos`.
+5. Crear `recordatorios_mantenimiento` y aplicar su `ALTER TABLE` después de crear `vehiculos` y `servicios`. El bloque de clientes contiene tanto la creación de `clientes` como la de recordatorios, por lo que hay que coordinar esos pasos.
+
+El DDL incorpora las decisiones aprobadas y está pendiente de validación en MySQL.
