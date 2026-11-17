@@ -15,9 +15,22 @@ Este documento se elaboró el 17/11/2026 para recuperar el trabajo planificado e
 
 ## Contratos externos conocidos
 
-- El PR #12 propone `vehiculos.id INT AUTO_INCREMENT PRIMARY KEY`, con referencia a `clientes(id)`. **El PR no constituye todavía un contrato integrado en develop**.
-- **Actualización 17/11:** la rama `feature/repuestos-database` ya publica `database/bloques/inventario.sql`, con `repuestos.id INT NOT NULL AUTO_INCREMENT` como PK. Este contrato es **propuesto y todavía no integrado a `develop`**; verificar contra el DER aprobado antes de crear la FK desde servicios.
-- La tabla `recordatorios_mantenimiento` de clientes contiene una FK a `servicios(id)`; el orden de integración debe considerarla.
+- `feature/clientes-database` y `main` declaran `clientes.id INT AUTO_INCREMENT PRIMARY KEY` en `database/bloques/clientes.sql`. El bloque también crea `recordatorios_mantenimiento` con una FK a `vehiculos(id)` y luego agrega otra a `servicios(id)`.
+- `feature/vehiculos-database` (PR #12) declara `vehiculos.id INT AUTO_INCREMENT PRIMARY KEY` y `vehiculos.cliente_id INT NOT NULL` con FK a `clientes(id)`. El bloque de vehículos está vacío en `main` y `develop`.
+- `feature/repuestos-database` y `main` declaran `repuestos.id INT NOT NULL AUTO_INCREMENT` como PK en `database/bloques/inventario.sql` (PR #18). Los identificadores de las tres tablas usan `INT` con signo. Los tres bloques de dependencias están vacíos en `develop` y en la rama de servicios revisada.
+
+## Borrador SQL local
+
+El borrador de las seis tablas quedó en el commit local `5e42265` de `backup-trabajo-local-17nov`. Sus FK a `vehiculos(id)` y `repuestos(id)` coinciden en tipo con los scripts revisados. El bloque de servicios de la rama de trabajo sigue vacío hasta cotejar el borrador con el DER.
+
+| Tabla | Qué cotejar en el borrador |
+| --- | --- |
+| `servicio_estados` | ID, nombre único y valores permitidos. |
+| `mantenimiento_tipos` | ID, nombre único, descripción y nulabilidad. |
+| `tecnicos` | ID, nombre, especialidad y valor inicial de activo. |
+| `servicios` | PK, FK a vehículo y catálogos, obligatoriedad, fechas, descripción y costo de mano de obra. |
+| `servicios_repuestos` | PK compuesta, cardinalidad, tipos y límites de cantidades, precio unitario y comportamiento en reserva, consumo, cancelación y devolución. |
+| `servicios_tecnicos` | PK compuesta, cardinalidad, fecha de asignación y precisión y límites de horas trabajadas. |
 
 ## Decisiones que debe aprobar el equipo
 
@@ -29,7 +42,7 @@ Este documento se elaboró el 17/11/2026 para recuperar el trabajo planificado e
 
 ## Orden de integración propuesto (pendiente de confirmación)
 
-`clientes` → `vehiculos` → catálogos/técnicos → `servicios` → `servicios_tecnicos`; integrar `repuestos` antes de `servicios_repuestos` y agregar las FK de `recordatorios_mantenimiento` cuando existan sus destinos.
+Crear primero solo la tabla `clientes` del bloque de clientes. Crear `vehiculos`, los catálogos de servicios y `tecnicos` antes de `servicios`. Ejecutar inventario antes de crear `servicios_repuestos` y crear `servicios_tecnicos` después de sus dos tablas destino. Crear `recordatorios_mantenimiento` y aplicar su `ALTER TABLE` cuando ya existan `vehiculos` y `servicios`.
 
 ## Alcance de la recuperación
 
