@@ -114,3 +114,21 @@ mvn test
 ## Estado
 
 Proyecto en desarrollo.
+
+
+## Seguimiento diario — 17/11/2026 (Día 3)
+
+Estado verificado en GitHub al inicio de la jornada; las tareas pendientes no implican que no exista trabajo local sin subir.
+
+| Integrante | Evidencia revisada | Objetivo de hoy |
+| --- | --- | --- |
+| Marilud | PR #11 fusionado: clientes y recordatorios | Revisar dependencias y pruebas SQL — issue #15 |
+| Crisbely | PR #12 abierto: vehiculos; base main | Corregir restricciones, cambiar destino a develop e integrar — issue #14 |
+| Valeria | Sin commits de inventario localizados en el historial revisado | Crear seis tablas de inventario y proveedores — issue #13 |
+| Zlatan | JDBC integrado; bloque servicios no localizado | Completar seis tablas de servicios y técnicos — issue #16 |
+
+**Orden de integración:** clientes → vehiculos → servicios; repuestos y catálogos independientes antes de servicios_repuestos; recordatorios_mantenimiento después de vehiculos y servicios. Separar creación de tablas y adición de claves foráneas cuando haya dependencias cruzadas. Validar el orden con el DER y con MySQL.
+
+**Flujo:** desarrollar en `feature/...`, realizar commits descriptivos, push, PR a `develop`, revisar y probar; integrar `develop` a `main` solo cuando los bloques estén validados.
+
+**Registro diario:** cada issue debe incluir avances, dificultades, enlaces de commit/PR y resultado de pruebas. No marcar casillas como completadas sin evidencia.
