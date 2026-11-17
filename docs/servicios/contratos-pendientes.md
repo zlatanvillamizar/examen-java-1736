@@ -41,6 +41,12 @@ Los `CHECK`, incluido el de `activo`, requieren MySQL 8.0.16 o posterior. Invent
 
 Queda pendiente definir si `cantidad_reservada` es un saldo o un total acumulado. Hasta confirmarlo, cada cantidad se valida por separado. También quedan por definir el catálogo de estados, sus transiciones y las reglas de inventario para cancelación y concurrencia.
 
+## Alcance de la primera versión Java
+
+`ServicioService` valida los registros, las fechas y la asignación de técnicos activos. El cambio de estado comprueba que el identificador sea positivo y delega la existencia del estado a la FK. Queda pendiente definir las transiciones permitidas y cuáles requieren registrar la entrega. La PK compuesta rechaza asignaciones duplicadas. El contrato de lectura se reutiliza para buscar y listar órdenes. El contrato de escritura existente también incluye repuestos, cuya implementación queda para la fase de inventario.
+
+Para registrar órdenes, MySQL requiere un vehículo existente y filas en los catálogos de estados y tipos de mantenimiento. El Java de esta fase no usa Inventario. Crear el bloque SQL completo sí requiere la tabla `repuestos`.
+
 ## Diferencias con el borrador `5e42265`
 
 - `servicio_estados.nombre` pasa de `VARCHAR(30)` a `VARCHAR(100)`.
