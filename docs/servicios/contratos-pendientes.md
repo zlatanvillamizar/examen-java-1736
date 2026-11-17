@@ -16,14 +16,14 @@ Este documento se elaboró el 17/11/2026 para recuperar el trabajo planificado e
 ## Contratos externos conocidos
 
 - El PR #12 propone `vehiculos.id INT AUTO_INCREMENT PRIMARY KEY`, con referencia a `clientes(id)`. **El PR no constituye todavía un contrato integrado en develop**.
-- La PK, tipos y restricciones de `repuestos` no están publicados en el SQL compartido.
+- **Actualización 17/11:** la rama `feature/repuestos-database` ya publica `database/bloques/inventario.sql`, con `repuestos.id INT NOT NULL AUTO_INCREMENT` como PK. Este contrato es **propuesto y todavía no integrado a `develop`**; verificar contra el DER aprobado antes de crear la FK desde servicios.
 - La tabla `recordatorios_mantenimiento` de clientes contiene una FK a `servicios(id)`; el orden de integración debe considerarla.
 
 ## Decisiones que debe aprobar el equipo
 
 1. Columnas, tipos, índices, PK, FK, UNIQUE y nulabilidad de cada tabla.
 2. Si `servicios.id` es `INT`, compatible con la FK propuesta por recordatorios.
-3. Identificador y tipo de `repuestos`, y política de stock.
+3. Confirmación del identificador `repuestos.id INT` propuesto por Valeria y política de stock.
 4. Significado exacto de `cantidad_reservada` y `cantidad_usada`: reserva, consumo, cancelación, devolución y concurrencia.
 5. Estados de servicio permitidos y transiciones válidas.
 
