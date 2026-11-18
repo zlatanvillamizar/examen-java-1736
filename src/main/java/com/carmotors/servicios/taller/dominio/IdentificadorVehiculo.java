@@ -1,4 +1,4 @@
-package com.carmotors.servicios.dominio;
+package com.carmotors.servicios.taller.dominio;
 
 /** Referencia lógica al vehículo; no define columnas ni relaciones SQL. */
 public record IdentificadorVehiculo(long valor) {

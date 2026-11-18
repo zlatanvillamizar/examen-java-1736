@@ -1,4 +1,4 @@
-package com.carmotors.servicios.integracion;
+package com.carmotors.servicios.taller.integracion;
 
 public record ConsumoRepuesto(int servicioId, int repuestoId, int cantidad) {
     public ConsumoRepuesto {
