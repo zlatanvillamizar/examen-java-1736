@@ -1,4 +1,4 @@
-package com.carmotors.servicios.taller;
+package com.carmotors.servicio.taller;
 
 import org.junit.jupiter.api.Test;
 

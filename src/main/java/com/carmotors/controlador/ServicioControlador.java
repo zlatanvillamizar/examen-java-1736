@@ -3,8 +3,8 @@ package com.carmotors.controlador;
 import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
-import com.carmotors.servicios.taller.ServicioService;
-import com.carmotors.servicios.taller.dominio.IdentificadorServicio;
+import com.carmotors.servicio.taller.ServicioService;
+import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;

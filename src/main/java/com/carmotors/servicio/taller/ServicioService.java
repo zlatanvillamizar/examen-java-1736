@@ -1,12 +1,12 @@
-package com.carmotors.servicios.taller;
+package com.carmotors.servicio.taller;
 
 import com.carmotors.dao.ServicioDAO;
 import com.carmotors.dao.TecnicoDAO;
 import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
-import com.carmotors.servicios.taller.dominio.IdentificadorServicio;
-import com.carmotors.servicios.taller.dominio.IdentificadorVehiculo;
+import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
+import com.carmotors.servicio.taller.dominio.IdentificadorVehiculo;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;

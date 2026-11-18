@@ -1,4 +1,4 @@
-package com.carmotors.servicios.taller;
+package com.carmotors.servicio.taller;
 
 import java.util.List;
 import java.util.Optional;

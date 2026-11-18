@@ -1,4 +1,4 @@
-package com.carmotors.servicios.taller;
+package com.carmotors.servicio.taller;
 
 /**
  * Casos de uso de escritura de órdenes de servicio.
