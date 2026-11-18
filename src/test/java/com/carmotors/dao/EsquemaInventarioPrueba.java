@@ -10,64 +10,120 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
- * Prepara las tablas de inventario en una base MySQL de <b>prueba</b> para las
- * pruebas de integración de los DAO.
+ * Base de datos MySQL <b>desechable</b> para las pruebas de integración de los DAO.
  *
- * <p>La conexión se configura con {@code CARMOTORS_TEST_DB_URL} (por ejemplo
- * {@code jdbc:mysql://localhost:3306/carmotors_pruebas}),
- * {@code CARMOTORS_TEST_DB_USER} y {@code CARMOTORS_TEST_DB_PASSWORD}.
- * <b>Borra y recrea las tablas de inventario</b>: por seguridad se niega a
- * hacerlo si el nombre de la base no contiene "prueba".</p>
+ * <p>Cada instancia crea una base nueva con nombre único
+ * ({@code carmotors_prueba_<aleatorio>}), crea ahí las tablas con
+ * {@code database/bloques/inventario.sql} y la elimina completa en
+ * {@link #close()}. <b>Nunca borra tablas ni datos de una base que ya
+ * existía</b>: {@code CREATE DATABASE} falla si el nombre ya está en uso, y
+ * solo se elimina la base que esta misma instancia creó.</p>
+ *
+ * <p>Configuración (las pruebas se saltan si no existe la URL):</p>
+ * <ul>
+ *   <li>{@code CARMOTORS_TEST_DB_URL}: servidor MySQL, por ejemplo
+ *       {@code jdbc:mysql://localhost:3306/}. La base indicada en la URL, si la hay, no se toca.</li>
+ *   <li>{@code CARMOTORS_TEST_DB_USER} y {@code CARMOTORS_TEST_DB_PASSWORD}: usuario con permiso
+ *       {@code CREATE} y {@code DROP} sobre las bases {@code carmotors_prueba_%}.</li>
+ * </ul>
  */
-final class EsquemaInventarioPrueba {
+final class EsquemaInventarioPrueba implements AutoCloseable {
 
     static final String VARIABLE_URL = "CARMOTORS_TEST_DB_URL";
 
+    private static final String PREFIJO = "carmotors_prueba_";
+    private static final Pattern NOMBRE_VALIDO = Pattern.compile("^carmotors_prueba_[0-9a-f]{16}$");
     private static final Path SCRIPT_INVENTARIO = Path.of("database", "bloques", "inventario.sql");
-    private static final List<String> TABLAS_EN_ORDEN_DE_BORRADO = List.of(
-            "evaluaciones_proveedor", "proveedores_repuestos", "lotes",
-            "repuestos", "proveedores", "repuesto_tipos");
 
-    private EsquemaInventarioPrueba() {
+    private final String base;
+    private boolean eliminada;
+
+    private EsquemaInventarioPrueba(String base) {
+        this.base = base;
     }
 
-    static Connection conectar() throws SQLException {
-        return DriverManager.getConnection(
-                System.getenv(VARIABLE_URL),
-                System.getenv().getOrDefault("CARMOTORS_TEST_DB_USER", "root"),
-                System.getenv().getOrDefault("CARMOTORS_TEST_DB_PASSWORD", ""));
+    /** Crea una base desechable vacía con las tablas de inventario. */
+    static EsquemaInventarioPrueba crear() throws SQLException, IOException {
+        String nombre = PREFIJO + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        verificarNombre(nombre);
+        try (Connection conexion = conectarAlServidor(); Statement sentencia = conexion.createStatement()) {
+            // Sin IF NOT EXISTS: si por casualidad el nombre ya existe, falla en vez de reutilizarla.
+            sentencia.execute("CREATE DATABASE `" + nombre + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        }
+        EsquemaInventarioPrueba esquema = new EsquemaInventarioPrueba(nombre);
+        try {
+            esquema.crearTablas();
+        } catch (SQLException | IOException | RuntimeException e) {
+            esquema.close();
+            throw e;
+        }
+        return esquema;
     }
 
-    /** Borra las tablas de inventario y las crea de nuevo con {@code inventario.sql}. */
-    static void recrear() throws SQLException, IOException {
+    /** Conexión a la base desechable; úsala como {@link FuenteConexion} de los DAO. */
+    Connection conectar() throws SQLException {
+        if (eliminada) {
+            throw new IllegalStateException("La base de prueba ya fue eliminada");
+        }
+        Connection conexion = conectarAlServidor();
+        conexion.setCatalog(base);
+        return conexion;
+    }
+
+    /** Ejecuta una instrucción SQL en la base desechable (para datos de apoyo). */
+    void ejecutar(String sql) throws SQLException {
+        try (Connection conexion = conectar(); Statement sentencia = conexion.createStatement()) {
+            sentencia.execute(sql);
+        }
+    }
+
+    String nombre() {
+        return base;
+    }
+
+    /** Elimina la base desechable que creó esta instancia (y solo esa). */
+    @Override
+    public void close() throws SQLException {
+        if (eliminada) {
+            return;
+        }
+        verificarNombre(base);
+        try (Connection conexion = conectarAlServidor(); Statement sentencia = conexion.createStatement()) {
+            sentencia.execute("DROP DATABASE IF EXISTS `" + base + "`");
+        }
+        eliminada = true;
+    }
+
+    private void crearTablas() throws SQLException, IOException {
         String script = Files.readString(SCRIPT_INVENTARIO, StandardCharsets.UTF_8);
         try (Connection conexion = conectar(); Statement sentencia = conexion.createStatement()) {
-            String base = conexion.getCatalog();
-            if (base == null || !base.contains("prueba")) {
-                throw new IllegalStateException(
-                        "Por seguridad, la base de prueba debe tener 'prueba' en el nombre: " + base);
-            }
-            sentencia.execute("SET FOREIGN_KEY_CHECKS = 0");
-            for (String tabla : TABLAS_EN_ORDEN_DE_BORRADO) {
-                sentencia.execute("DROP TABLE IF EXISTS " + tabla);
-            }
-            sentencia.execute("SET FOREIGN_KEY_CHECKS = 1");
             for (String instruccion : instrucciones(script)) {
                 sentencia.execute(instruccion);
             }
         }
     }
 
-    /** Ejecuta una instrucción SQL suelta en la base de prueba (para datos de apoyo). */
-    static void ejecutar(String sql) throws SQLException {
-        try (Connection conexion = conectar(); Statement sentencia = conexion.createStatement()) {
-            sentencia.execute(sql);
+    private static Connection conectarAlServidor() throws SQLException {
+        return DriverManager.getConnection(
+                System.getenv(VARIABLE_URL),
+                System.getenv().getOrDefault("CARMOTORS_TEST_DB_USER", "root"),
+                System.getenv().getOrDefault("CARMOTORS_TEST_DB_PASSWORD", ""));
+    }
+
+    private static void verificarNombre(String nombre) {
+        if (!NOMBRE_VALIDO.matcher(nombre).matches()) {
+            throw new IllegalStateException("Nombre de base de prueba no permitido: " + nombre);
         }
     }
 
-    /** Divide el script en instrucciones, sin comentarios ni el USE de la base real. */
+    /**
+     * Divide el script en instrucciones, sin comentarios ni el {@code USE}
+     * (así nunca cambia a la base real {@code carmotors}).
+     */
     private static List<String> instrucciones(String script) {
         StringBuilder limpio = new StringBuilder();
         for (String linea : script.split("\\R")) {
@@ -77,9 +133,16 @@ final class EsquemaInventarioPrueba {
             }
             limpio.append(linea).append('\n');
         }
-        return Arrays.stream(limpio.toString().split(";"))
+        List<String> instrucciones = Arrays.stream(limpio.toString().split(";"))
                 .map(String::strip)
                 .filter(s -> !s.isEmpty())
                 .toList();
+        for (String instruccion : instrucciones) {
+            String mayusculas = instruccion.toUpperCase();
+            if (mayusculas.startsWith("DROP") || mayusculas.startsWith("TRUNCATE") || mayusculas.startsWith("DELETE")) {
+                throw new IllegalStateException("El script de inventario no debe borrar datos: " + instruccion);
+            }
+        }
+        return instrucciones;
     }
 }

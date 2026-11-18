@@ -1,6 +1,7 @@
 package com.carmotors.dao;
 
 import com.carmotors.modelo.Proveedor;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -19,17 +20,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Prueba {@link ProveedorDAO} contra un MySQL real de <b>prueba</b>.
- * Solo se ejecuta si existe {@code CARMOTORS_TEST_DB_URL}; ver {@link EsquemaInventarioPrueba}.
+ * Usa una base desechable propia (ver {@link EsquemaInventarioPrueba}) y solo se ejecuta si existe {@code CARMOTORS_TEST_DB_URL}.
  */
 @EnabledIfEnvironmentVariable(named = "CARMOTORS_TEST_DB_URL", matches = ".+")
 class ProveedorDAOIntegracionTest {
 
+    private EsquemaInventarioPrueba esquema;
     private ProveedorDAO dao;
 
+    /** Cada prueba usa una base desechable nueva; nunca toca una base existente. */
     @BeforeEach
-    void recrearTablasDeInventario() throws SQLException, IOException {
-        EsquemaInventarioPrueba.recrear();
-        dao = new ProveedorDAO(EsquemaInventarioPrueba::conectar);
+    void crearBaseDesechable() throws SQLException, IOException {
+        esquema = EsquemaInventarioPrueba.crear();
+        dao = new ProveedorDAO(esquema::conectar);
+    }
+
+    @AfterEach
+    void eliminarBaseDesechable() throws SQLException {
+        if (esquema != null) {
+            esquema.close();
+        }
     }
 
     @Test
