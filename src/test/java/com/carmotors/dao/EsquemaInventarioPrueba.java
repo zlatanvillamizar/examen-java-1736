@@ -31,9 +31,9 @@ import java.util.regex.Pattern;
  *       {@code CREATE} y {@code DROP} sobre las bases {@code carmotors_prueba_%}.</li>
  * </ul>
  */
-final class EsquemaInventarioPrueba implements AutoCloseable {
+public final class EsquemaInventarioPrueba implements AutoCloseable {
 
-    static final String VARIABLE_URL = "CARMOTORS_TEST_DB_URL";
+    public static final String VARIABLE_URL = "CARMOTORS_TEST_DB_URL";
 
     private static final String PREFIJO = "carmotors_prueba_";
     private static final Pattern NOMBRE_VALIDO = Pattern.compile("^carmotors_prueba_[0-9a-f]{16}$");
@@ -47,7 +47,7 @@ final class EsquemaInventarioPrueba implements AutoCloseable {
     }
 
     /** Crea una base desechable vacía con las tablas de inventario. */
-    static EsquemaInventarioPrueba crear() throws SQLException, IOException {
+    public static EsquemaInventarioPrueba crear() throws SQLException, IOException {
         String nombre = PREFIJO + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         verificarNombre(nombre);
         try (Connection conexion = conectarAlServidor(); Statement sentencia = conexion.createStatement()) {
@@ -65,7 +65,7 @@ final class EsquemaInventarioPrueba implements AutoCloseable {
     }
 
     /** Conexión a la base desechable; úsala como {@link FuenteConexion} de los DAO. */
-    Connection conectar() throws SQLException {
+    public Connection conectar() throws SQLException {
         if (eliminada) {
             throw new IllegalStateException("La base de prueba ya fue eliminada");
         }
@@ -75,13 +75,13 @@ final class EsquemaInventarioPrueba implements AutoCloseable {
     }
 
     /** Ejecuta una instrucción SQL en la base desechable (para datos de apoyo). */
-    void ejecutar(String sql) throws SQLException {
+    public void ejecutar(String sql) throws SQLException {
         try (Connection conexion = conectar(); Statement sentencia = conexion.createStatement()) {
             sentencia.execute(sql);
         }
     }
 
-    String nombre() {
+    public String nombre() {
         return base;
     }
 

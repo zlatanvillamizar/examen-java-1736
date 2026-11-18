@@ -53,6 +53,8 @@ class InventarioControladorTest {
                 "Filtro", "Bosch", 1, new BigDecimal("1.00"), -1, 0));
         assertThrows(IllegalArgumentException.class, () -> controlador.registrarRepuesto(
                 " ", "Bosch", 1, new BigDecimal("1.00"), 1, 0));
+        assertThrows(IllegalArgumentException.class, () -> controlador.registrarRepuesto(
+                "Filtro", "Bosch", 1, null, 1, 0));
         assertEquals(0, repuestos.cantidadGuardados());
     }
 

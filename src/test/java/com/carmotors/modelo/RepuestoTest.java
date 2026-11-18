@@ -55,7 +55,7 @@ class RepuestoTest {
     void rechazaPrecioNegativoONulo() {
         assertThrows(IllegalArgumentException.class,
                 () -> Repuesto.nuevo("Filtro", "Bosch", 1, new BigDecimal("-0.01"), 1, 0));
-        assertThrows(NullPointerException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> Repuesto.nuevo("Filtro", "Bosch", 1, null, 1, 0));
     }
 
