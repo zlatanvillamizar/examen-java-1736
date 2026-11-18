@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
@@ -40,28 +41,100 @@ final class VistaServicios {
                     5. Actualizar fecha de entrega
                     6. Registrar técnico
                     7. Asignar técnico
+                    8. Gestión de técnicos
                     0. Volver al menú principal""");
             try {
-                switch (leer("Opción")) {
-                    case "0" -> { return; }
-                    case "1" -> registrarOrden();
-                    case "2" -> buscarOrden();
-                    case "3" -> listarOrdenes();
-                    case "4" -> actualizarEstado();
-                    case "5" -> actualizarEntrega();
-                    case "6" -> registrarTecnico();
-                    case "7" -> asignarTecnico();
-                    default -> salida.println("Opción inválida. Elija un número entre 0 y 7.");
+                String opcion = leer("Opción");
+                if ("0".equals(opcion)) {
+                    return;
                 }
+                ejecutar(() -> {
+                    switch (opcion) {
+                        case "1" -> registrarOrden();
+                        case "2" -> buscarOrden();
+                        case "3" -> listarOrdenes();
+                        case "4" -> actualizarEstado();
+                        case "5" -> actualizarEntrega();
+                        case "6" -> registrarTecnico();
+                        case "7" -> asignarTecnico();
+                        case "8" -> mostrarMenuTecnicos();
+                        default -> salida.println("Opción inválida. Elija un número entre 0 y 8.");
+                    }
+                });
             } catch (FinEntrada e) {
                 return;
-            } catch (IllegalArgumentException | NoSuchElementException e) {
-                salida.println("Validación: " + e.getMessage());
-            } catch (SQLException e) {
-                salida.println("Error de base de datos. Revise los datos ingresados y la conexión.");
-            } catch (IllegalStateException e) {
-                salida.println("Error: " + e.getMessage());
             }
+        }
+    }
+
+    private void mostrarMenuTecnicos() {
+        while (true) {
+            salida.println("""
+                    === Técnicos ===
+                    1. Buscar técnico por ID
+                    2. Listar todos los técnicos
+                    3. Listar técnicos activos
+                    4. Activar o desactivar técnico
+                    0. Volver a Servicios""");
+            String opcion = leer("Opción");
+            if ("0".equals(opcion)) {
+                return;
+            }
+            ejecutar(() -> {
+                switch (opcion) {
+                    case "1" -> buscarTecnico();
+                    case "2" -> mostrarTecnicos(controlador.listarTecnicos(), "No hay técnicos registrados.");
+                    case "3" -> mostrarTecnicos(controlador.listarTecnicosActivos(), "No hay técnicos activos.");
+                    case "4" -> actualizarTecnicoActivo();
+                    default -> salida.println("Opción inválida. Elija un número entre 0 y 4.");
+                }
+            });
+        }
+    }
+
+    private void ejecutar(Operacion operacion) {
+        try {
+            operacion.ejecutar();
+        } catch (IllegalArgumentException | NoSuchElementException e) {
+            salida.println("Validación: " + e.getMessage());
+        } catch (SQLException e) {
+            salida.println("Error de base de datos. Revise los datos ingresados y la conexión.");
+        } catch (IllegalStateException e) {
+            salida.println("Error: " + e.getMessage());
+        }
+    }
+
+    private void buscarTecnico() throws SQLException {
+        int id = entero("ID del técnico");
+        controlador.buscarTecnico(id).ifPresentOrElse(this::mostrarTecnico,
+                () -> salida.println("No se encontró el técnico " + id + "."));
+    }
+
+    private void mostrarTecnicos(List<Tecnico> tecnicos, String mensajeSinResultados) {
+        if (tecnicos.isEmpty()) {
+            salida.println(mensajeSinResultados);
+        }
+        tecnicos.forEach(this::mostrarTecnico);
+    }
+
+    private void mostrarTecnico(Tecnico tecnico) {
+        salida.printf("Técnico %d | %s | Especialidad: %s | Estado: %s%n",
+                tecnico.id(), tecnico.nombre(),
+                tecnico.especialidad() == null ? "sin registrar" : tecnico.especialidad(),
+                tecnico.activo() ? "activo" : "inactivo");
+    }
+
+    private void actualizarTecnicoActivo() throws SQLException {
+        int id = entero("ID del técnico");
+        boolean activo = switch (leer("¿Activar o desactivar? (a/d)")) {
+            case "a", "A" -> true;
+            case "d", "D" -> false;
+            default -> throw new IllegalArgumentException("La respuesta debe ser a o d.");
+        };
+        if (controlador.actualizarTecnicoActivo(id, activo)) {
+            salida.println(activo ? "Técnico activado." : "Técnico desactivado.");
+        } else {
+            salida.println("No se encontró el técnico " + id + ".");
         }
     }
 
@@ -163,6 +236,11 @@ final class VistaServicios {
             throw new FinEntrada();
         }
         return entrada.nextLine().strip();
+    }
+
+    @FunctionalInterface
+    private interface Operacion {
+        void ejecutar() throws SQLException;
     }
 
     private static final class FinEntrada extends RuntimeException {
