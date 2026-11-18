@@ -24,12 +24,6 @@ import java.util.Optional;
  */
 public class RepuestoDAO {
 
-    /** Fuente de conexiones; permite usar una base de prueba en los tests. */
-    @FunctionalInterface
-    public interface ProveedorConexion {
-        Connection obtener() throws SQLException;
-    }
-
     private static final String COLUMNAS =
             "id, nombre, marca, repuesto_tipo_id, precio_venta, cantidad_stock, stock_minimo";
 
@@ -48,20 +42,20 @@ public class RepuestoDAO {
     private static final String SQL_LEER_STOCK =
             "SELECT cantidad_stock FROM repuestos WHERE id = ?";
 
-    private final ProveedorConexion proveedor;
+    private final FuenteConexion fuente;
 
     /** Usa la conexión configurada en {@link ConexionFactory}. */
     public RepuestoDAO() {
         this(ConexionFactory::obtenerConexion);
     }
 
-    public RepuestoDAO(ProveedorConexion proveedor) {
-        this.proveedor = Objects.requireNonNull(proveedor);
+    public RepuestoDAO(FuenteConexion fuente) {
+        this.fuente = Objects.requireNonNull(fuente);
     }
 
     /** Devuelve todos los repuestos ordenados por id, o una lista vacía. */
     public List<Repuesto> listar() throws SQLException {
-        try (Connection conexion = proveedor.obtener();
+        try (Connection conexion = fuente.obtener();
              PreparedStatement sentencia = conexion.prepareStatement(SQL_LISTAR);
              ResultSet filas = sentencia.executeQuery()) {
             List<Repuesto> repuestos = new ArrayList<>();
@@ -75,7 +69,7 @@ public class RepuestoDAO {
     /** Devuelve un Optional vacío cuando el repuesto no existe. */
     public Optional<Repuesto> buscarPorId(int id) throws SQLException {
         validarId(id);
-        try (Connection conexion = proveedor.obtener();
+        try (Connection conexion = fuente.obtener();
              PreparedStatement sentencia = conexion.prepareStatement(SQL_BUSCAR_POR_ID)) {
             sentencia.setInt(1, id);
             try (ResultSet filas = sentencia.executeQuery()) {
@@ -94,7 +88,7 @@ public class RepuestoDAO {
         if (repuesto.id() != null) {
             throw new IllegalArgumentException("Un repuesto nuevo no debe traer id");
         }
-        try (Connection conexion = proveedor.obtener();
+        try (Connection conexion = fuente.obtener();
              PreparedStatement sentencia =
                      conexion.prepareStatement(SQL_INSERTAR, Statement.RETURN_GENERATED_KEYS)) {
             sentencia.setString(1, repuesto.nombre());
@@ -178,7 +172,7 @@ public class RepuestoDAO {
 
     /** Ejecuta la operación en una transacción; deshace todo si algo falla. */
     private int enTransaccion(OperacionTransaccional operacion) throws SQLException {
-        try (Connection conexion = proveedor.obtener()) {
+        try (Connection conexion = fuente.obtener()) {
             boolean autoCommitOriginal = conexion.getAutoCommit();
             conexion.setAutoCommit(false);
             try {
