@@ -8,6 +8,7 @@ import com.carmotors.modelo.Vehiculo;
 import java.sql.SQLException;
 import java.time.Year;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public class VehiculoService {
@@ -19,12 +20,22 @@ public class VehiculoService {
         this(new VehiculoDAO(), new ClienteDAO());
     }
 
+    // Validar que las dependencias no sean nulas
     public VehiculoService(VehiculoDAO vehiculoDAO,
                            ClienteDAO clienteDAO) {
-        this.vehiculoDAO = vehiculoDAO;
-        this.clienteDAO = clienteDAO;
+
+        this.vehiculoDAO = Objects.requireNonNull(
+                vehiculoDAO,
+                "El VehiculoDAO no puede ser nulo"
+        );
+
+        this.clienteDAO = Objects.requireNonNull(
+                clienteDAO,
+                "El ClienteDAO no puede ser nulo"
+        );
     }
 
+    // Registrar un vehículo
     public Vehiculo registrar(Vehiculo vehiculo) throws SQLException {
 
         if (vehiculo == null) {
@@ -54,19 +65,20 @@ public class VehiculoService {
                     "La placa debe tener entre 5 y 10 caracteres alfanuméricos");
         }
 
-        // Validar duplicados
+        // Validar placas duplicadas
         if (vehiculoDAO.buscarPorPlaca(placa).isPresent()) {
             throw new IllegalArgumentException(
                     "Ya existe un vehículo con esa placa");
         }
 
-        // Validar marca y modelo
+        // Validar marca
         if (vehiculo.getMarca() == null ||
                 vehiculo.getMarca().isBlank()) {
             throw new IllegalArgumentException(
                     "La marca es obligatoria");
         }
 
+        // Validar modelo
         if (vehiculo.getModelo() == null ||
                 vehiculo.getModelo().isBlank()) {
             throw new IllegalArgumentException(
@@ -82,11 +94,13 @@ public class VehiculoService {
                     "El año del vehículo no es válido");
         }
 
+        // Normalizar placa antes de guardar
         vehiculo.setPlaca(placa);
 
         return vehiculoDAO.registrar(vehiculo);
     }
 
+    // Buscar vehículo por ID
     public Optional<Vehiculo> buscarPorId(int id)
             throws SQLException {
 
@@ -98,6 +112,7 @@ public class VehiculoService {
         return vehiculoDAO.buscarPorId(id);
     }
 
+    // Buscar vehículo por placa
     public Optional<Vehiculo> buscarPorPlaca(String placa)
             throws SQLException {
 
@@ -110,6 +125,7 @@ public class VehiculoService {
                 placa.trim().toUpperCase());
     }
 
+    // Listar todos los vehículos
     public List<Vehiculo> listar() throws SQLException {
         return vehiculoDAO.listar();
     }
