@@ -61,3 +61,13 @@ application-local.yaml
 *.temp
 *.swp
 *~
+
+# Local AI agent instructions and workspace state (instructor feedback)
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.aider*
+.cursor/
+.claude/
+.codex/
+.continue/
