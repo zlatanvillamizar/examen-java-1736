@@ -1,4 +1,4 @@
-package com.carmotors.servicios.integracion;
+package com.carmotors.servicios.taller.integracion;
 
 /**
  * Contrato que Servicios usa para solicitar movimientos de inventario.
