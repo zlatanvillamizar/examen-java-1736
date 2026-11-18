@@ -3,8 +3,8 @@ package com.carmotors.dao;
 import com.carmotors.config.ConexionFactory;
 import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
-import com.carmotors.servicios.taller.RepositorioConsultaOrdenServicio;
-import com.carmotors.servicios.taller.dominio.IdentificadorServicio;
+import com.carmotors.servicio.taller.RepositorioConsultaOrdenServicio;
+import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
