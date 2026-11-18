@@ -1,7 +1,6 @@
 package com.carmotors.modelo;
 
 import java.math.BigDecimal;
-import java.util.Objects;
 
 /**
  * Repuesto del inventario. Refleja la tabla {@code repuestos} de
@@ -28,7 +27,9 @@ public record Repuesto(
         if (repuestoTipoId <= 0) {
             throw new IllegalArgumentException("El tipo de repuesto debe ser un id positivo");
         }
-        Objects.requireNonNull(precioVenta, "El precio de venta es obligatorio");
+        if (precioVenta == null) {
+            throw new IllegalArgumentException("El precio de venta es obligatorio");
+        }
         if (precioVenta.signum() < 0) {
             throw new IllegalArgumentException("El precio de venta no puede ser negativo");
         }
