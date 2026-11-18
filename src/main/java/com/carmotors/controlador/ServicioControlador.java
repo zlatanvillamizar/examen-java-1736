@@ -51,6 +51,22 @@ public final class ServicioControlador {
         return servicio.registrarTecnico(solicitud);
     }
 
+    public Optional<Tecnico> buscarTecnico(int id) throws SQLException {
+        return servicio.buscarTecnico(id);
+    }
+
+    public List<Tecnico> listarTecnicos() throws SQLException {
+        return servicio.listarTecnicos();
+    }
+
+    public List<Tecnico> listarTecnicosActivos() throws SQLException {
+        return servicio.listarTecnicosActivos();
+    }
+
+    public boolean actualizarTecnicoActivo(int id, boolean activo) throws SQLException {
+        return servicio.actualizarTecnicoActivo(id, activo);
+    }
+
     public void asignarTecnico(ServicioTecnico asignacion) throws SQLException {
         servicio.asignarTecnico(asignacion);
     }

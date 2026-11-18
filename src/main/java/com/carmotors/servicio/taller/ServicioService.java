@@ -80,6 +80,24 @@ public final class ServicioService {
                 solicitud.especialidad(), solicitud.activo()));
     }
 
+    public Optional<Tecnico> buscarTecnico(int id) throws SQLException {
+        validarId(id, "técnico");
+        return tecnicos.buscarPorId(id);
+    }
+
+    public List<Tecnico> listarTecnicos() throws SQLException {
+        return tecnicos.listar();
+    }
+
+    public List<Tecnico> listarTecnicosActivos() throws SQLException {
+        return tecnicos.listarActivos();
+    }
+
+    public boolean actualizarTecnicoActivo(int id, boolean activo) throws SQLException {
+        validarId(id, "técnico");
+        return tecnicos.actualizarActivo(id, activo);
+    }
+
     public void asignarTecnico(ServicioTecnico asignacion) throws SQLException {
         if (asignacion == null || asignacion.fechaAsignacion() == null) {
             throw new IllegalArgumentException("La fecha de asignación es obligatoria");
