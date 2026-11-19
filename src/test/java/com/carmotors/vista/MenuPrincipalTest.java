@@ -3,6 +3,8 @@ package com.carmotors.vista;
 import com.carmotors.Main;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -32,9 +34,10 @@ class MenuPrincipalTest {
         assertTrue(ejecutarMain("2\n1\n").contains("ID del cliente: "));
     }
 
-    @Test
-    void informaQueLaVistaEstaPendienteYRegresaAlMenu() {
-        String salida = ejecutarMain("7\n0\n");
+    @ParameterizedTest
+    @ValueSource(strings = {"1", "4", "5", "6", "7"})
+    void informaQueLaVistaEstaPendienteYRegresaAlMenu(String opcion) {
+        String salida = ejecutarMain(opcion + "\n0\n");
         assertTrue(salida.contains("La vista de este módulo está pendiente de integración."));
         assertEquals(2L, salida.lines().filter(linea -> linea.contains("=== CarMotors SGT ===")).count());
     }

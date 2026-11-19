@@ -3,15 +3,23 @@ package com.carmotors.vista;
 import com.carmotors.controlador.ServicioControlador;
 import com.carmotors.controlador.VehiculoControlador;
 
+import java.io.PrintStream;
+import java.util.Map;
 import java.util.Scanner;
 
 public class MenuPrincipal {
     public void mostrar() {
         Scanner entrada = new Scanner(System.in);
-        VistaServicios servicios = new VistaServicios(entrada, System.out, new ServicioControlador());
-        VistaVehiculos vehiculos = new VistaVehiculos(entrada, System.out, new VehiculoControlador());
+        PrintStream salida = System.out;
+        VistaServicios servicios = new VistaServicios(entrada, salida, new ServicioControlador());
+        VistaVehiculos vehiculos = new VistaVehiculos(entrada, salida, new VehiculoControlador());
+        mostrar(entrada, salida, Map.of("2", vehiculos::mostrar, "3", servicios::mostrar));
+    }
+
+    // Cada acción usa la entrada compartida y devuelve el control con 0 o al llegar a EOF.
+    void mostrar(Scanner entrada, PrintStream salida, Map<String, Runnable> rutas) {
         while (true) {
-            System.out.println("""
+            salida.println("""
                     === CarMotors SGT ===
                     1. Clientes
                     2. Vehículos
@@ -21,18 +29,25 @@ public class MenuPrincipal {
                     6. Recordatorios y Alertas
                     7. Facturación
                     0. Salir""");
-            System.out.print("Opción: ");
+            salida.print("Opción: ");
             if (!entrada.hasNextLine()) {
                 return;
             }
-            switch (entrada.nextLine().strip()) {
+            String opcion = entrada.nextLine().strip();
+            switch (opcion) {
                 case "0" -> { return; }
-                case "2" -> vehiculos.mostrar();
-                case "3" -> servicios.mostrar();
-                case "1", "4", "5", "6", "7" ->
-                        System.out.println("La vista de este módulo está pendiente de integración.");
-                default -> System.out.println("Opción inválida. Elija un número entre 0 y 7.");
+                case "1", "2", "3", "4", "5", "6", "7" ->
+                        abrirVista(rutas.get(opcion), salida);
+                default -> salida.println("Opción inválida. Elija un número entre 0 y 7.");
             }
+        }
+    }
+
+    private static void abrirVista(Runnable vista, PrintStream salida) {
+        if (vista == null) {
+            salida.println("La vista de este módulo está pendiente de integración.");
+        } else {
+            vista.run();
         }
     }
 }
