@@ -30,6 +30,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -260,6 +261,21 @@ class InventarioServiciosJdbcIntegracionTest {
     @Test
     void liberarSinReservaFalla() {
         assertThrows(NoSuchElementException.class, () -> liberar(SERVICIO_A, FILTRO, 1));
+    }
+
+    @Test
+    void ejemploAprobadoD1ReservarCincoConsumirDosYLiberarElResto() throws SQLException {
+        reservar(SERVICIO_A, FILTRO, 5);
+        assertArrayEquals(new int[]{5, 0}, linea(SERVICIO_A, FILTRO));
+        assertEquals(5, stock(FILTRO));
+
+        consumir(SERVICIO_A, FILTRO, 2);
+        assertArrayEquals(new int[]{3, 2}, linea(SERVICIO_A, FILTRO));
+        assertEquals(5, stock(FILTRO), "Consumir no vuelve a descontar el stock");
+
+        liberar(SERVICIO_A, FILTRO, 3);
+        assertArrayEquals(new int[]{0, 2}, linea(SERVICIO_A, FILTRO));
+        assertEquals(STOCK_INICIAL - 2, stock(FILTRO), "Solo quedan fuera las 2 unidades usadas");
     }
 
     @Test
