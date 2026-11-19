@@ -11,6 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --protocol=tcp --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v4
       - name: Set up Java 17
@@ -19,5 +32,13 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-      - name: Compile and run unit tests
+      - name: Run unit and isolated MySQL tests
+        env:
+          CARMOTORS_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/
+          CARMOTORS_TEST_DB_USER: root
         run: mvn --batch-mode --no-transfer-progress clean verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/

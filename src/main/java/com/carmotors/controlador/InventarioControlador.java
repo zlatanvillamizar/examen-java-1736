@@ -11,7 +11,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Punto de entrada del módulo de Inventario para la futura vista.
+ * Punto de entrada del módulo de Inventario para las vistas de consola
+ * ({@code VistaInventario} y {@code VistaProveedores}).
  * No contiene SQL: delega las reglas de negocio en {@link InventarioService}.
  *
  * <p>Errores que la vista debe manejar:</p>
@@ -22,8 +23,9 @@ import java.util.Optional;
  *   <li>{@link IllegalStateException}: ya existe un proveedor con ese nombre.</li>
  * </ul>
  *
- * <p>Las reservas de repuestos ({@code InventarioServiciosPort}) no se exponen
- * hasta que se acuerden sus reglas de negocio.</p>
+ * <p>Las reservas de repuestos para órdenes de servicio no pasan por este controlador:
+ * Servicios las coordina en su propia transacción con
+ * {@link com.carmotors.servicios.inventario.InventarioServiciosJdbc}.</p>
  */
 public final class InventarioControlador {
 
@@ -82,6 +84,10 @@ public final class InventarioControlador {
 
     public Optional<Proveedor> buscarProveedor(int id) throws SQLException {
         return inventario.buscarProveedor(id);
+    }
+
+    public Optional<Proveedor> buscarProveedorPorNombre(String nombre) throws SQLException {
+        return inventario.buscarProveedorPorNombre(nombre);
     }
 
     public List<Proveedor> listarProveedores() throws SQLException {

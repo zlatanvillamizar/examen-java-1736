@@ -6,14 +6,16 @@ import java.sql.SQLException;
 
 public class ConexionFactory {
 
-    private static final String URL = "jdbc:mysql://localhost:3306/carmotors";
-    private static final String USUARIO = "root";
-    private static final String PASSWORD = "123456";
-
     private ConexionFactory() {
     }
 
     public static Connection obtenerConexion() throws SQLException {
-        return DriverManager.getConnection(URL, USUARIO, PASSWORD);
+        String url = System.getenv("CARMOTORS_DB_URL");
+        String usuario = System.getenv("CARMOTORS_DB_USER");
+        String password = System.getenv("CARMOTORS_DB_PASSWORD");
+        if (url == null || url.isBlank() || usuario == null || usuario.isBlank() || password == null) {
+            throw new SQLException("Configure CARMOTORS_DB_URL, CARMOTORS_DB_USER y CARMOTORS_DB_PASSWORD");
+        }
+        return DriverManager.getConnection(url, usuario, password);
     }
 }

@@ -1,134 +1,121 @@
-# CarMotors — Sistema de Gestión de Taller (SGT)
+# CarMotors — Sistema de Gestión de Taller
 
-Proyecto académico desarrollado en **Java 17**, **Maven**, **JDBC** y **MySQL** para gestionar las operaciones principales de un taller automotriz.
+Proyecto académico de Zlatan Ricardo Villamizar Fajardo, Valeria, Crisbely y Marilud. Gestiona clientes, vehículos, órdenes, técnicos, inventario, proveedores, recordatorios y facturación.
 
-## Integrantes
+## Requisitos
 
-- Zlatan Ricardo Villamizar Fajardo
-- Valeria
-- Crisbely
-- Marilud
+- JDK 17 y Maven 3.
+- MySQL 8.0.16 o posterior para aplicar las restricciones `CHECK`.
+- Una cuenta JDBC con acceso al esquema de la aplicación. Para las pruebas JDBC, usa una cuenta con permisos de creación, uso y eliminación sobre esquemas de prueba `carmotors_prueba_*`.
 
-## Objetivo
+## Instalación y ejecución
 
-Desarrollar un sistema de consola que permita administrar clientes, vehículos, órdenes de servicio, técnicos, repuestos, inventario, proveedores, facturación y reportes del taller CarMotors.
-
-## Módulos principales
-
-### Clientes
-Registro de clientes, vehículos asociados, historial de servicios y recordatorios de mantenimiento.
-
-### Servicios
-Creación y seguimiento de órdenes de servicio, asignación de técnicos y repuestos y control de estados.
-
-### Inventario
-Registro de repuestos, existencias, stock mínimo, lotes, proveedores y trazabilidad.
-
-### Facturación y reportes
-Generación de facturas y consultas para apoyar el control administrativo del taller.
-
-## Tecnologías
-
-- Java 17
-- Maven
-- JDBC
-- MySQL
-- IntelliJ IDEA
-- Git y GitHub
-
-## Arquitectura
-
-El proyecto utiliza una estructura basada en MVC y separación por capas:
-
-```text
-src/main/java/
-├── model/
-├── view/
-├── controller/
-├── service/
-└── repository/
-```
-
-La lógica de negocio se mantiene en la capa de servicios y el acceso a datos se realiza mediante repositorios/DAO.
-
-## Base de datos
-
-Los scripts SQL del proyecto se almacenarán en:
-
-```text
-database/
-├── schema.sql
-└── data.sql
-```
-
-El modelo contempla como entidades principales:
-
-- clientes
-- vehiculos
-- servicios
-- repuestos
-
-Además de sus tablas relacionadas para técnicos, proveedores, lotes, recordatorios, facturas y catálogos.
-
-## Flujo de trabajo Git
-
-Se utilizará una estrategia basada en:
-
-```text
-main
-└── develop
-    └── feature/...
-```
-
-Cada integrante desarrolla su tarea en una rama `feature` y posteriormente realiza un Pull Request hacia `develop`.
-
-### Convención de commits
-
-Los commits deben escribirse en inglés siguiendo Conventional Commits.
-
-Ejemplos:
-
-```text
-feat(database): add client and maintenance reminder tables
-feat(database): add vehicle table and relationships
-feat(database): add inventory and supplier tables
-feat(database): add service and technician tables
-fix(database): correct service foreign keys
-docs(readme): update project documentation
-```
-
-## Ejecución con Maven
-
-Compilar:
+Clona la rama de revisión del PR #70. La rama principal de integración es `develop`.
 
 ```bash
-mvn clean compile
+git clone --branch integracion/carmotors-final https://github.com/zlatanvillamizar/proyecto-java-grupo03.git
+cd proyecto-java-grupo03
+java -version
+mvn -version
 ```
 
-Ejecutar las pruebas:
+Comprueba que Maven también muestra Java 17. Desde la raíz del repositorio, abre el cliente MySQL con una cuenta administrativa. Sustituye `admin_local` por tu usuario de MySQL.
 
 ```bash
-mvn test
+mysql --host=127.0.0.1 --port=3306 --user=admin_local --password
 ```
 
-## Estado
+En el cliente, comprueba el destino y crea una base nueva. Si el nombre ya existe, detente y elige otro antes de importar el esquema. Usa el mismo nombre al configurar la URL JDBC.
 
-Proyecto en desarrollo.
+```sql
+SELECT @@hostname, @@port, VERSION();
+CREATE DATABASE carmotors CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE carmotors;
+SELECT DATABASE();
+```
 
+En esa sesión interactiva, ejecuta `SOURCE database/esquema/esquema.sql` desde la raíz del repositorio. También puedes salir del cliente y cargar el mismo archivo por entrada estándar. MySQL solicitará la contraseña administrativa.
 
-## Seguimiento diario — 17/11/2026 (Día 3)
+```bash
+mysql --host=127.0.0.1 --port=3306 --user=admin_local --password --default-character-set=utf8mb4 --database=carmotors < database/esquema/esquema.sql
+```
 
-Estado verificado en GitHub al inicio de la jornada; las tareas pendientes no implican que no exista trabajo local sin subir.
+Usa una cuenta de aplicación con permisos de lectura y escritura sobre ese esquema. Si necesitas crearla, ejecuta estas dos sentencias como administrador, ajustando el nombre de la base y el host de la cuenta si corresponde. La generación de contraseña del ejemplo requiere MySQL 8.0.18 o posterior. Guarda la contraseña de forma privada. [Manual de MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-user.html)
 
-| Integrante | Evidencia revisada | Objetivo de hoy |
-| --- | --- | --- |
-| Marilud | PR #11 fusionado: clientes y recordatorios | Revisar dependencias y pruebas SQL — issue #15 |
-| Crisbely | PR #12 abierto: vehiculos; base main | Corregir restricciones, cambiar destino a develop e integrar — issue #14 |
-| Valeria | Sin commits de inventario localizados en el historial revisado | Crear seis tablas de inventario y proveedores — issue #13 |
-| Zlatan | JDBC integrado; bloque servicios no localizado | Completar seis tablas de servicios y técnicos — issue #16 |
+```sql
+CREATE USER 'carmotors_app'@'localhost' IDENTIFIED BY RANDOM PASSWORD;
+GRANT SELECT, INSERT, UPDATE, DELETE ON carmotors.* TO 'carmotors_app'@'localhost';
+```
 
-**Orden de integración:** clientes → vehiculos → servicios; repuestos y catálogos independientes antes de servicios_repuestos; recordatorios_mantenimiento después de vehiculos y servicios. Separar creación de tablas y adición de claves foráneas cuando haya dependencias cruzadas. Validar el orden con el DER y con MySQL.
+Carga los catálogos de estados y tipos de mantenimiento antes de registrar órdenes. Servicios identifica la cancelación por los nombres `Cancelado` o `Cancelada`, sin distinguir mayúsculas. Facturación requiere `Completado`. Registrar un vehículo requiere un cliente existente. Una instalación vacía permite probar la conexión desde **2 → 4** (Vehículos → Listar vehículos).
 
-**Flujo:** desarrollar en `feature/...`, realizar commits descriptivos, push, PR a `develop`, revisar y probar; integrar `develop` a `main` solo cuando los bloques estén validados.
+Antes de registrar repuestos, puedes cargar el catálogo inicial de Valeria en la misma base seleccionada. El script añade seis nombres, se puede volver a ejecutar y conserva el DDL aprobado.
 
-**Registro diario:** cada issue debe incluir avances, dificultades, enlaces de commit/PR y resultado de pruebas. No marcar casillas como completadas sin evidencia.
+```sql
+SELECT DATABASE();
+SOURCE docs/inventario/repuesto_tipos_iniciales.sql
+SELECT id, nombre FROM repuesto_tipos ORDER BY nombre;
+```
+
+Usa los IDs devueltos al registrar un repuesto. Si cargas el archivo por entrada estándar, emplea el mismo comando de importación del esquema con la ruta `docs/inventario/repuesto_tipos_iniciales.sql`.
+
+Configura las variables en la misma terminal que ejecutará Maven, o en la configuración local de IntelliJ. Mantén los valores fuera del repositorio.
+
+| Variable | Contenido |
+| --- | --- |
+| `CARMOTORS_DB_URL` | URL JDBC del esquema, por ejemplo `jdbc:mysql://127.0.0.1:3306/carmotors` |
+| `CARMOTORS_DB_USER` | Usuario de la aplicación |
+| `CARMOTORS_DB_PASSWORD` | Contraseña de la cuenta JDBC |
+
+En Bash puedes leer la contraseña sin mostrarla.
+
+```bash
+export CARMOTORS_DB_URL='jdbc:mysql://127.0.0.1:3306/carmotors'
+export CARMOTORS_DB_USER='carmotors_app'
+read -rs -p 'Contraseña JDBC: ' CARMOTORS_DB_PASSWORD
+echo
+export CARMOTORS_DB_PASSWORD
+```
+
+En PowerShell 7.2 o posterior.
+
+```powershell
+$env:CARMOTORS_DB_URL = 'jdbc:mysql://127.0.0.1:3306/carmotors'
+$env:CARMOTORS_DB_USER = 'carmotors_app'
+$env:CARMOTORS_DB_PASSWORD = Read-Host 'Contraseña JDBC' -MaskInput
+```
+
+Ejecuta `com.carmotors.Main` desde IntelliJ tras importar el `pom.xml`, o usa el comando de terminal para iniciar una JVM Java 17 con el classpath de Maven. La primera ejecución descarga el complemento y las dependencias. Usa `0` para volver desde un submenú y `0` en el menú principal para salir.
+
+```bash
+mvn compile org.codehaus.mojo:exec-maven-plugin:3.5.0:exec "-Dexec.executable=java" "-Dexec.args=-classpath %classpath com.carmotors.Main"
+```
+
+El script consolidado crea clientes → vehículos → inventario → servicios → recordatorios → facturas. Los archivos de `database/bloques/` conservan el DDL de cada equipo. El bloque original de Clientes también contiene Recordatorios y requiere separarlos para una instalación desde cero. El script consolidado usa el esquema seleccionado, crea tablas y restricciones, y está destinado a una instalación nueva. Para actualizar una instalación con el esquema anterior del proyecto, detén la aplicación y aplica una sola vez [la migración de detalle histórico](database/migraciones/001_detalle_historico_facturas.sql) sobre la base seleccionada. Conserva los importes existentes. Las facturas anteriores a la migración muestran un aviso cuando carecen del detalle original.
+
+Las nuevas facturas guardan el detalle, precios y datos de presentación en la misma transacción que sus importes. Una orden facturada rechaza consumos adicionales y conserva la posibilidad de liberar reservas pendientes.
+
+## Módulos y arquitectura
+
+| Módulo | Estado de la consola en esta rama |
+| --- | --- |
+| Clientes | Activa en la opción 1. Registra clientes, muestra su ID, permite buscarlos por ID o documento, listarlos y actualizar su contacto. |
+| Vehículos | Registro y consultas con la vista de #67. |
+| Servicios y Técnicos | Órdenes, asignaciones y movimientos de repuestos. |
+| Inventario y Proveedores | Vistas activas en las opciones 4 y 5. Incluyen registro, consultas, movimientos de stock y actualización del contacto del proveedor. |
+| Recordatorios y Alertas | Activa en la opción 6. Crea y consulta recordatorios, muestra alertas y permite notificar. |
+| Facturación | Activa en la opción 7. Emite una factura por servicio completado, la consulta y lista facturas. |
+
+Facturación cobra únicamente los repuestos consumidos. La consola usa una tasa de impuestos del 0 % para la demostración académica.
+
+`Main` abre `vista.MenuPrincipal`, que comparte un único `Scanner` con las vistas. Los controladores delegan en las clases de servicio y los DAO ejecutan SQL mediante JDBC. Servicios coordina la transacción y construye el adaptador de Inventario con esa misma conexión. La reserva descuenta unidades disponibles, el consumo las mueve al saldo usado y la liberación devuelve el pendiente. Al cancelar, Servicios bloquea la orden y confirma a la vez el estado y la devolución. La primera reserva fija el precio de la línea.
+
+## Pruebas
+
+```bash
+mvn clean verify
+```
+
+Para ejecutar también las pruebas JDBC, configura `CARMOTORS_TEST_DB_URL` con la URL del servidor (por ejemplo, `jdbc:mysql://localhost:3306/`), `CARMOTORS_TEST_DB_USER` y `CARMOTORS_TEST_DB_PASSWORD`. Las pruebas crean esquemas aleatorios desechables y eliminan los que crearon. Sin URL de prueba, las pruebas JDBC se marcan como omitidas. Los informes de JUnit quedan en `target/surefire-reports` y GitHub Actions los adjunta a su ejecución con MySQL 8.0.
+
+Consulta el [contrato de consola y la lista de incorporación de vistas](docs/navegacion-consola.md) y el [informe de integración](docs/integracion-final.md).

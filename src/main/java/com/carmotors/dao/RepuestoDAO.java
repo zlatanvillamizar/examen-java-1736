@@ -17,10 +17,11 @@ import java.util.Optional;
  * Acceso a datos de la tabla {@code repuestos} con JDBC y {@link PreparedStatement}.
  *
  * <p>Los movimientos de stock son entradas y salidas directas sobre
- * {@code cantidad_stock}. <b>No</b> implementan reservas: la relación entre
- * {@code servicios_repuestos.cantidad_reservada}, {@code cantidad_usada},
- * {@code cantidad_stock} y {@code lotes.cantidad_disponible} sigue pendiente
- * de acuerdo del equipo (issues #13 y #16).</p>
+ * {@code cantidad_stock}. {@code registrarEntrada}/{@code registrarSalida} usan su
+ * propia transacción; {@code sumarStock}, {@code restarStock} y
+ * {@code bloquearParaActualizar} trabajan sobre una transacción abierta por quien
+ * llama (las usa el adaptador de reservas para Servicios). Los movimientos por lote
+ * ({@code lotes.cantidad_disponible}) siguen pendientes de acuerdo (D4).</p>
  */
 public class RepuestoDAO {
 
@@ -41,6 +42,8 @@ public class RepuestoDAO {
             "UPDATE repuestos SET cantidad_stock = cantidad_stock - ? WHERE id = ? AND cantidad_stock >= ?";
     private static final String SQL_LEER_STOCK =
             "SELECT cantidad_stock FROM repuestos WHERE id = ?";
+    private static final String SQL_BLOQUEAR_STOCK =
+            "SELECT cantidad_stock FROM repuestos WHERE id = ? FOR UPDATE";
 
     private final FuenteConexion fuente;
 
@@ -116,17 +119,7 @@ public class RepuestoDAO {
     public int registrarEntrada(int repuestoId, int cantidad) throws SQLException {
         validarId(repuestoId);
         validarCantidad(cantidad);
-        return enTransaccion(conexion -> {
-            try (PreparedStatement sentencia = conexion.prepareStatement(SQL_SUMAR_STOCK)) {
-                sentencia.setInt(1, cantidad);
-                sentencia.setInt(2, repuestoId);
-                if (sentencia.executeUpdate() == 0) {
-                    throw new RepuestoNoEncontradoException(repuestoId);
-                }
-            }
-            return leerStock(conexion, repuestoId)
-                    .orElseThrow(() -> new RepuestoNoEncontradoException(repuestoId));
-        });
+        return enTransaccion(conexion -> sumarStock(conexion, repuestoId, cantidad));
     }
 
     /**
@@ -140,20 +133,76 @@ public class RepuestoDAO {
     public int registrarSalida(int repuestoId, int cantidad) throws SQLException {
         validarId(repuestoId);
         validarCantidad(cantidad);
-        return enTransaccion(conexion -> {
-            try (PreparedStatement sentencia = conexion.prepareStatement(SQL_RESTAR_STOCK)) {
-                sentencia.setInt(1, cantidad);
-                sentencia.setInt(2, repuestoId);
-                sentencia.setInt(3, cantidad);
-                if (sentencia.executeUpdate() == 0) {
-                    int disponible = leerStock(conexion, repuestoId)
-                            .orElseThrow(() -> new RepuestoNoEncontradoException(repuestoId));
-                    throw new StockInsuficienteException(repuestoId, cantidad, disponible);
-                }
+        return enTransaccion(conexion -> restarStock(conexion, repuestoId, cantidad));
+    }
+
+    // ---------- operaciones sobre una transacción abierta por quien llama ----------
+    // No abren, confirman, deshacen ni cierran la conexión: eso es responsabilidad de
+    // quien coordina la transacción (por ejemplo, Servicios al reservar repuestos).
+
+    /**
+     * Suma {@code cantidad} al stock dentro de la transacción de {@code conexion}
+     * y devuelve el stock resultante.
+     *
+     * @throws RepuestoNoEncontradoException si el repuesto no existe
+     */
+    public int sumarStock(Connection conexion, int repuestoId, int cantidad) throws SQLException {
+        validarId(repuestoId);
+        validarCantidad(cantidad);
+        try (PreparedStatement sentencia = conexion.prepareStatement(SQL_SUMAR_STOCK)) {
+            sentencia.setInt(1, cantidad);
+            sentencia.setInt(2, repuestoId);
+            if (sentencia.executeUpdate() == 0) {
+                throw new RepuestoNoEncontradoException(repuestoId);
             }
-            return leerStock(conexion, repuestoId)
-                    .orElseThrow(() -> new RepuestoNoEncontradoException(repuestoId));
-        });
+        }
+        return leerStock(conexion, repuestoId)
+                .orElseThrow(() -> new RepuestoNoEncontradoException(repuestoId));
+    }
+
+    /**
+     * Resta {@code cantidad} del stock dentro de la transacción de {@code conexion}
+     * y devuelve el stock resultante. El {@code UPDATE} condicionado impide que el
+     * stock quede negativo, también con operaciones simultáneas.
+     *
+     * @throws RepuestoNoEncontradoException si el repuesto no existe
+     * @throws StockInsuficienteException    si no hay stock suficiente
+     */
+    public int restarStock(Connection conexion, int repuestoId, int cantidad) throws SQLException {
+        validarId(repuestoId);
+        validarCantidad(cantidad);
+        try (PreparedStatement sentencia = conexion.prepareStatement(SQL_RESTAR_STOCK)) {
+            sentencia.setInt(1, cantidad);
+            sentencia.setInt(2, repuestoId);
+            sentencia.setInt(3, cantidad);
+            if (sentencia.executeUpdate() == 0) {
+                int disponible = leerStock(conexion, repuestoId)
+                        .orElseThrow(() -> new RepuestoNoEncontradoException(repuestoId));
+                throw new StockInsuficienteException(repuestoId, cantidad, disponible);
+            }
+        }
+        return leerStock(conexion, repuestoId)
+                .orElseThrow(() -> new RepuestoNoEncontradoException(repuestoId));
+    }
+
+    /**
+     * Bloquea la fila del repuesto ({@code SELECT … FOR UPDATE}) hasta que termine la
+     * transacción y devuelve su stock actual. Sirve para tomar los bloqueos siempre en
+     * el mismo orden (primero {@code repuestos}) y evitar interbloqueos.
+     *
+     * @throws RepuestoNoEncontradoException si el repuesto no existe
+     */
+    public int bloquearParaActualizar(Connection conexion, int repuestoId) throws SQLException {
+        validarId(repuestoId);
+        try (PreparedStatement sentencia = conexion.prepareStatement(SQL_BLOQUEAR_STOCK)) {
+            sentencia.setInt(1, repuestoId);
+            try (ResultSet filas = sentencia.executeQuery()) {
+                if (!filas.next()) {
+                    throw new RepuestoNoEncontradoException(repuestoId);
+                }
+                return filas.getInt(1);
+            }
+        }
     }
 
     private Optional<Integer> leerStock(Connection conexion, int repuestoId) throws SQLException {
@@ -165,27 +214,9 @@ public class RepuestoDAO {
         }
     }
 
-    @FunctionalInterface
-    private interface OperacionTransaccional {
-        int ejecutar(Connection conexion) throws SQLException;
-    }
-
-    /** Ejecuta la operación en una transacción; deshace todo si algo falla. */
-    private int enTransaccion(OperacionTransaccional operacion) throws SQLException {
-        try (Connection conexion = fuente.obtener()) {
-            boolean autoCommitOriginal = conexion.getAutoCommit();
-            conexion.setAutoCommit(false);
-            try {
-                int resultado = operacion.ejecutar(conexion);
-                conexion.commit();
-                return resultado;
-            } catch (SQLException | RuntimeException e) {
-                conexion.rollback();
-                throw e;
-            } finally {
-                conexion.setAutoCommit(autoCommitOriginal);
-            }
-        }
+    /** Ejecuta la operación en una transacción propia; deshace todo si algo falla. */
+    private int enTransaccion(Transaccion.Trabajo<Integer> operacion) throws SQLException {
+        return Transaccion.ejecutar(fuente, operacion);
     }
 
     private static Repuesto mapear(ResultSet fila) throws SQLException {
