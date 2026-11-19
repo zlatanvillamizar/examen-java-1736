@@ -18,6 +18,16 @@ import java.util.Optional;
 
 public class FacturaDAO {
 
+    private final FuenteConexion fuente;
+
+    public FacturaDAO() {
+        this(ConexionFactory::obtenerConexion);
+    }
+
+    FacturaDAO(FuenteConexion fuente) {
+        this.fuente = java.util.Objects.requireNonNull(fuente);
+    }
+
     private static final String INSERT =
             "INSERT INTO facturas (servicio_id, fecha_emision, total_repuestos, "
                     + "total_mano_obra, impuestos, total_final) VALUES (?, ?, ?, ?, ?, ?)";
@@ -46,7 +56,7 @@ public class FacturaDAO {
 
     /** Inserta la factura dentro de una transacción (commit, o rollback si falla). */
     public Factura crear(Factura f) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion()) {
+        try (Connection con = fuente.obtener()) {
             return insertarEnTransaccion(con, f);
         }
     }
@@ -100,7 +110,7 @@ public class FacturaDAO {
     }
 
     public Optional<Factura> buscarPorId(int id) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_BY_ID)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -110,7 +120,7 @@ public class FacturaDAO {
     }
 
     public Optional<Factura> buscarPorServicio(int servicioId) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_BY_SERVICIO)) {
             ps.setInt(1, servicioId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -121,7 +131,7 @@ public class FacturaDAO {
 
     public List<Factura> listar() throws SQLException {
         List<Factura> lista = new ArrayList<>();
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_ALL);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) lista.add(mapear(rs));
@@ -131,7 +141,7 @@ public class FacturaDAO {
 
     /** Lee servicio + vehículo + cliente + repuestos usados. Vacío si falta alguna relación. */
     public Optional<ServicioFacturable> buscarServicioFacturable(int servicioId) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_SERVICIO)) {
             ps.setInt(1, servicioId);
             try (ResultSet rs = ps.executeQuery()) {
