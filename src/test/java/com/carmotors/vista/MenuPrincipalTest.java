@@ -4,6 +4,7 @@ import com.carmotors.Main;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
@@ -35,11 +36,32 @@ class MenuPrincipalTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"1", "4", "5", "6", "7"})
+    @ValueSource(strings = {"1", "6", "7"})
     void informaQueLaVistaEstaPendienteYRegresaAlMenu(String opcion) {
         String salida = ejecutarMain(opcion + "\n0\n");
         assertTrue(salida.contains("La vista de este módulo está pendiente de integración."));
         assertEquals(2L, salida.lines().filter(linea -> linea.contains("=== CarMotors SGT ===")).count());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"4, Inventario, 7", "5, Proveedores, 5"})
+    void abreVistaRealRechazaOpcionInvalidaYRegresa(String opcion, String titulo, int maximo) {
+        String salida = ejecutarMain(opcion + "\nx\n0\n2\n0\n0\n");
+        int vista = salida.indexOf("=== " + titulo + " ===");
+        int invalida = salida.indexOf("Opción inválida. Elija un número entre 0 y " + maximo + ".");
+        int vehiculos = salida.indexOf("=== Vehículos ===");
+        assertTrue(vista >= 0 && invalida > vista && vehiculos > invalida, salida);
+        assertEquals(3L, salida.lines().filter(linea -> linea.contains("=== CarMotors SGT ===")).count());
+        assertFalse(salida.contains("pendiente de integración"), salida);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"4, Inventario", "5, Proveedores"})
+    void terminaConEofEnLaVistaRealOEnUnRegistro(String opcion, String titulo) {
+        assertTrue(ejecutarMain(opcion + "\n").contains("=== " + titulo + " ==="));
+        String salida = ejecutarMain(opcion + "\n1\n");
+        assertTrue(salida.contains("Nombre: "), salida);
+        assertFalse(salida.contains("registrado con ID"), salida);
     }
 
     private String ejecutarMain(String datos) {

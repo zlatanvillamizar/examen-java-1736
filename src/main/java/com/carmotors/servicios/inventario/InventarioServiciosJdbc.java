@@ -5,6 +5,7 @@ import com.carmotors.dao.RepuestoDAO;
 import com.carmotors.dao.RepuestoNoEncontradoException;
 import com.carmotors.dao.ReservaRepuestoDAO;
 import com.carmotors.dao.StockInsuficienteException;
+import com.carmotors.dao.Transaccion;
 import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
 import com.carmotors.servicio.taller.integracion.InventarioServiciosPort;
 import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
@@ -36,6 +37,15 @@ import java.util.Objects;
  * <b>Si una operación lanza cualquier excepción, quien coordina debe hacer
  * {@code rollback}</b> de toda la transacción. {@link #ejecutarEnTransaccion} lo hace
  * automáticamente.</p>
+ *
+ * <h2>Concurrencia</h2>
+ * <p>Cada operación bloquea primero la fila de {@code repuestos} y después la línea de
+ * {@code servicios_repuestos}, siempre en ese orden. Si Servicios combina varias
+ * operaciones de distintos repuestos en una misma transacción, conviene hacerlas en
+ * orden ascendente de {@code repuesto_id}. MySQL resuelve un interbloqueo eventual
+ * abortando una transacción (la {@link SQLException} llega como causa), que se puede
+ * reintentar completa. Antes de cancelar, Servicios debería bloquear la fila del
+ * servicio para que no entren reservas nuevas mientras se liberan.</p>
  *
  * <h2>Errores</h2>
  * <ul>
@@ -76,26 +86,9 @@ public final class InventarioServiciosJdbc implements InventarioServiciosPort {
      */
     public static <T> T ejecutarEnTransaccion(FuenteConexion fuente, OperacionConInventario<T> operacion)
             throws SQLException {
-        Objects.requireNonNull(fuente);
-        Objects.requireNonNull(operacion);
-        try (Connection conexion = fuente.obtener()) {
-            boolean autoCommitOriginal = conexion.getAutoCommit();
-            conexion.setAutoCommit(false);
-            try {
-                T resultado = operacion.ejecutar(conexion, new InventarioServiciosJdbc(conexion));
-                conexion.commit();
-                return resultado;
-            } catch (SQLException | RuntimeException | Error e) {
-                try {
-                    conexion.rollback();
-                } catch (SQLException errorRollback) {
-                    e.addSuppressed(errorRollback);
-                }
-                throw e;
-            } finally {
-                conexion.setAutoCommit(autoCommitOriginal);
-            }
-        }
+        Objects.requireNonNull(operacion, "La operación es obligatoria");
+        return Transaccion.ejecutar(fuente, conexion ->
+                operacion.ejecutar(conexion, new InventarioServiciosJdbc(conexion)));
     }
 
     @Override
@@ -116,6 +109,8 @@ public final class InventarioServiciosJdbc implements InventarioServiciosPort {
     public void consumir(ConsumoRepuesto solicitud) {
         Objects.requireNonNull(solicitud, "El consumo es obligatorio");
         enLaTransaccion("consumir", solicitud.servicioId(), solicitud.repuestoId(), () -> {
+            // Mismo orden de bloqueo que reservar y liberar: primero repuestos, luego la línea.
+            repuestos.bloquearParaActualizar(conexion, solicitud.repuestoId());
             // El stock ya se descontó al reservar: solo se mueve el saldo a usadas.
             if (!reservas.consumir(conexion, solicitud.servicioId(), solicitud.repuestoId(),
                     solicitud.cantidad())) {

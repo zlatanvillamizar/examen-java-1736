@@ -47,7 +47,17 @@ CREATE USER 'carmotors_app'@'localhost' IDENTIFIED BY RANDOM PASSWORD;
 GRANT SELECT, INSERT, UPDATE, DELETE ON carmotors.* TO 'carmotors_app'@'localhost';
 ```
 
-Carga los catálogos de estados, tipos de mantenimiento y tipos de repuesto antes de registrar órdenes y repuestos. El esquema deja la asignación de IDs al catálogo. Servicios identifica la cancelación por los nombres `Cancelado` o `Cancelada`, sin distinguir mayúsculas. Facturación en el PR #68 espera `Completado`. Registrar un vehículo requiere un cliente existente. Una instalación vacía permite probar la conexión desde **2 → 4** (Vehículos → Listar vehículos).
+Carga los catálogos de estados y tipos de mantenimiento antes de registrar órdenes. Servicios identifica la cancelación por los nombres `Cancelado` o `Cancelada`, sin distinguir mayúsculas. Facturación en el PR #68 espera `Completado`. Registrar un vehículo requiere un cliente existente. Una instalación vacía permite probar la conexión desde **2 → 4** (Vehículos → Listar vehículos).
+
+Antes de registrar repuestos, puedes cargar el catálogo inicial de Valeria en la misma base seleccionada. El script añade seis nombres, se puede volver a ejecutar y conserva el DDL aprobado.
+
+```sql
+SELECT DATABASE();
+SOURCE docs/inventario/repuesto_tipos_iniciales.sql
+SELECT id, nombre FROM repuesto_tipos ORDER BY nombre;
+```
+
+Usa los IDs devueltos al registrar un repuesto. Si cargas el archivo por entrada estándar, emplea el mismo comando de importación del esquema con la ruta `docs/inventario/repuesto_tipos_iniciales.sql`.
 
 Configura las variables en la misma terminal que ejecutará Maven, o en la configuración local de IntelliJ. Mantén los valores fuera del repositorio.
 
@@ -90,7 +100,7 @@ El script consolidado crea clientes → vehículos → inventario → servicios 
 | Clientes | Controlador y persistencia disponibles. Vista pendiente. |
 | Vehículos | Registro y consultas con la vista de #67. |
 | Servicios y Técnicos | Órdenes, asignaciones y movimientos de repuestos. |
-| Inventario y Proveedores | Controlador y persistencia disponibles. Vistas pendientes. |
+| Inventario y Proveedores | Vistas activas en las opciones 4 y 5. Incluyen registro, consultas, movimientos de stock y actualización del contacto del proveedor. |
 | Recordatorios y Alertas | Vista candidata en #61, pendiente de validación JDBC e integración. |
 | Facturación | Vista y DAO en #68, pendientes de validar con JDBC e integrar al menú. |
 

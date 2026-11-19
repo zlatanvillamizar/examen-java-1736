@@ -1,6 +1,7 @@
 package com.carmotors.servicios.inventario;
 
 import com.carmotors.dao.EsquemaInventarioPrueba;
+import com.carmotors.dao.RepuestoDAO;
 import com.carmotors.dao.RepuestoNoEncontradoException;
 import com.carmotors.dao.StockInsuficienteException;
 import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
@@ -30,6 +31,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -263,6 +265,21 @@ class InventarioServiciosJdbcIntegracionTest {
     }
 
     @Test
+    void ejemploAprobadoD1ReservarCincoConsumirDosYLiberarElResto() throws SQLException {
+        reservar(SERVICIO_A, FILTRO, 5);
+        assertArrayEquals(new int[]{5, 0}, linea(SERVICIO_A, FILTRO));
+        assertEquals(5, stock(FILTRO));
+
+        consumir(SERVICIO_A, FILTRO, 2);
+        assertArrayEquals(new int[]{3, 2}, linea(SERVICIO_A, FILTRO));
+        assertEquals(5, stock(FILTRO), "Consumir no vuelve a descontar el stock");
+
+        liberar(SERVICIO_A, FILTRO, 3);
+        assertArrayEquals(new int[]{0, 2}, linea(SERVICIO_A, FILTRO));
+        assertEquals(STOCK_INICIAL - 2, stock(FILTRO), "Solo quedan fuera las 2 unidades usadas");
+    }
+
+    @Test
     void cancelarUnServicioLiberaTodoSuSaldoSinTocarLoUsadoNiOtrosServicios() throws SQLException {
         reservar(SERVICIO_A, FILTRO, 4);
         reservar(SERVICIO_A, BUJIA, 3);
@@ -331,6 +348,43 @@ class InventarioServiciosJdbcIntegracionTest {
             assertThrows(IllegalStateException.class, () -> inventario.reservar(new ReservaRepuesto(SERVICIO_A, FILTRO, 1)));
         }
         assertEquals(STOCK_INICIAL, stock(FILTRO));
+    }
+
+    // ---------- conexiones ----------
+
+    /** Conexiones abiertas en MySQL por el usuario de pruebas, sin contar la que consulta. */
+    private int conexionesAbiertas() throws SQLException {
+        return entero("SELECT COUNT(*) - 1 FROM information_schema.PROCESSLIST "
+                + "WHERE USER = SUBSTRING_INDEX(CURRENT_USER(), '@', 1)");
+    }
+
+    @Test
+    void noQuedanConexionesAbiertasTrasOperacionesCorrectasYFallidas() throws Exception {
+        int antes = conexionesAbiertas();
+        RepuestoDAO repuestosDao = new RepuestoDAO(esquema::conectar);
+
+        for (int i = 0; i < 5; i++) {
+            reservar(SERVICIO_A, FILTRO, 1);
+            consumir(SERVICIO_A, FILTRO, 1);
+            assertThrows(StockInsuficienteException.class, () -> reservar(SERVICIO_B, BUJIA, 99));
+            assertThrows(IllegalStateException.class, () -> consumir(SERVICIO_A, FILTRO, 50));
+            assertThrows(NoSuchElementException.class, () -> liberar(SERVICIO_B, FILTRO, 1));
+            assertThrows(IllegalArgumentException.class, () -> transaccion((c, inv) -> {
+                inv.reservar(new ReservaRepuesto(SERVICIO_B, BUJIA, 1));
+                throw new IllegalArgumentException("Regla de Servicios incumplida");
+            }));
+            repuestosDao.registrarEntrada(BUJIA, 1);
+            assertThrows(StockInsuficienteException.class, () -> repuestosDao.registrarSalida(BUJIA, 999));
+        }
+
+        // El servidor libera el hilo de una conexión cerrada casi de inmediato; se espera hasta 3 s.
+        int despues = conexionesAbiertas();
+        for (int intento = 0; intento < 30 && despues > antes; intento++) {
+            Thread.sleep(100);
+            despues = conexionesAbiertas();
+        }
+        assertEquals(antes, despues, "Cada operación debe cerrar su conexión, también cuando falla");
+        assertEquals(STOCK_INICIAL, totalFisico(FILTRO));
     }
 
     // ---------- concurrencia ----------
@@ -409,5 +463,41 @@ class InventarioServiciosJdbcIntegracionTest {
         assertEquals(STOCK_INICIAL, totalFisico(FILTRO), "bodega + reservado + usado = unidades iniciales");
         assertTrue(stock(FILTRO) >= 0);
         assertTrue(linea(SERVICIO_A, FILTRO)[0] >= 0 && linea(SERVICIO_B, FILTRO)[0] >= 0);
+    }
+
+    @Test
+    void transaccionesQueConsumenYReservanNoSeInterbloqueanConReservasSimultaneas() throws Exception {
+        reservar(SERVICIO_A, FILTRO, 5);
+        AtomicInteger turno = new AtomicInteger();
+        AtomicInteger errores = new AtomicInteger();
+
+        List<Future<Void>> resultados = enParalelo(30, () -> {
+            boolean combinada = turno.getAndIncrement() % 2 == 0;
+            try {
+                if (combinada) {
+                    // Una sola transacción de Servicios: consume una unidad y repone la reserva.
+                    transaccion((c, inv) -> {
+                        inv.consumir(new ConsumoRepuesto(SERVICIO_A, FILTRO, 1));
+                        inv.reservar(new ReservaRepuesto(SERVICIO_A, FILTRO, 1));
+                        return null;
+                    });
+                } else {
+                    reservar(SERVICIO_A, FILTRO, 1);
+                }
+            } catch (StockInsuficienteException e) {
+                // Rechazo de negocio válido: la transacción completa se deshizo.
+            } catch (IllegalStateException e) {
+                errores.incrementAndGet();
+                throw e;
+            }
+            return null;
+        });
+        for (Future<Void> r : resultados) {
+            r.get();
+        }
+
+        assertEquals(0, errores.get(), "No debía haber interbloqueos ni otros errores JDBC");
+        assertEquals(STOCK_INICIAL, totalFisico(FILTRO), "bodega + reservado + usado = unidades iniciales");
+        assertTrue(stock(FILTRO) >= 0);
     }
 }

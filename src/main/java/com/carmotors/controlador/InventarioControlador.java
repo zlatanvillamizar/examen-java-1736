@@ -11,7 +11,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Punto de entrada del módulo de Inventario para la futura vista.
+ * Punto de entrada del módulo de Inventario para las vistas de consola
+ * ({@code VistaInventario} y {@code VistaProveedores}).
  * No contiene SQL: delega las reglas de negocio en {@link InventarioService}.
  *
  * <p>Errores que la vista debe manejar:</p>
@@ -83,6 +84,10 @@ public final class InventarioControlador {
 
     public Optional<Proveedor> buscarProveedor(int id) throws SQLException {
         return inventario.buscarProveedor(id);
+    }
+
+    public Optional<Proveedor> buscarProveedorPorNombre(String nombre) throws SQLException {
+        return inventario.buscarProveedorPorNombre(nombre);
     }
 
     public List<Proveedor> listarProveedores() throws SQLException {

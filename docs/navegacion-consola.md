@@ -7,13 +7,15 @@
 | 1 | Clientes | Ruta pendiente. El controlador y el DAO están disponibles. |
 | 2 | Vehículos | Activa. Registra, busca por ID o placa y lista. |
 | 3 | Servicios y Técnicos | Activa. Gestiona órdenes, técnicos y repuestos. La opción 8 abre el submenú de Técnicos. |
-| 4 | Inventario y Repuestos | Ruta pendiente de vista. |
-| 5 | Proveedores | Ruta pendiente de vista. |
+| 4 | Inventario y Repuestos | Activa. Registra y consulta repuestos, stock, entradas, salidas y alertas de stock mínimo. |
+| 5 | Proveedores | Activa. Registra, busca por ID o nombre, lista y actualiza el contacto. |
 | 6 | Recordatorios y Alertas | Ruta pendiente. La vista candidata está en #61. |
 | 7 | Facturación | Ruta pendiente. La vista candidata está en #68. |
 | 0 | Salir | Termina Main. |
 
-Una ruta pendiente muestra un aviso y conserva el menú principal. `MenuPrincipalTest` comprueba ese comportamiento para las cinco opciones desde `Main`. `RutasPendientesMenuTest` instala acciones simuladas en el mismo despachador de producción y verifica selección, entrada compartida, opción inválida, retorno con `0` y fin de entrada. Las simulaciones cubren el despacho del menú. Cada vista real debe demostrar su propio comportamiento al incorporarse.
+Las opciones 1, 6 y 7 muestran un aviso y conservan el menú principal. `RutasPendientesMenuTest` verifica selección, entrada compartida, opción inválida, retorno con `0` y EOF con acciones simuladas. `MenuPrincipalTest` comprueba el aviso para las tres opciones pendientes y abre las vistas reales de Inventario y Proveedores desde `Main`, donde verifica entrada inválida, regreso con `0` y EOF tanto al abrir como durante el registro.
+
+Para registrar repuestos, carga primero [los datos iniciales de tipos](inventario/repuesto_tipos_iniciales.sql) en la base de la aplicación y consulta los IDs de `repuesto_tipos`. `AceptacionInventarioProveedoresTest` instala el esquema consolidado en MySQL, prueba ese catálogo y verifica persistencia del proveedor y el repuesto tras entradas, salidas y un rechazo por stock insuficiente.
 
 ## Contrato de las vistas
 
@@ -27,9 +29,9 @@ Una ruta pendiente muestra un aviso y conserva el menú principal. `MenuPrincipa
 
 - [ ] Registrar los SHA del candidato de #70 y de los nuevos commits. Compararlos con `fe652cd9`, cuya ejecución con Java 17 y MySQL 8.0 aprobó 207 pruebas.
 - [ ] Probar primero en una rama temporal. Revisar los deltas del menú, del contrato JDBC y de los esquemas de prueba para conservar sus resoluciones.
-- [ ] **Valeria — opciones 4 y 5.** Verificar que las vistas publicadas reciben la entrada compartida, llaman al controlador existente y vuelven con `0` o EOF. Repetir los casos de stock insuficiente, precio fijado, consumo, cancelación, rollback y concurrencia con los DAO de Inventario y Servicios.
+- [x] **Valeria — opciones 4 y 5.** Las vistas de `d248951` comparten la entrada y el controlador. Pasaron la aceptación sobre el esquema consolidado y las regresiones de stock, consumo, cancelación, rollback y concurrencia.
 - [ ] **Clientes — opción 1.** Conectar la vista que publique el módulo y comprobar que un cliente registrado desde la consola se puede usar para registrar un vehículo.
-- [ ] **Mary — opción 6.** Verificar consultas reales en MySQL, límites de fechas, FK de vehículo y servicio opcional, y que dos intentos concurrentes de notificación solo produzcan una transición. Probar EOF tanto en el menú como durante la captura de datos.
-- [ ] **Mary — opción 7.** Verificar emisión en MySQL con el estado facturable acordado y el impuesto configurado, líneas con cero unidades consumidas, rollback y una sola factura ante dos emisiones concurrentes. Probar EOF, entrada inválida, retorno y consulta de una factura emitida.
+- [ ] **Mary — opción 6.** En `a820836` siguen pendientes EOF seguro y notificación atómica. Verificar consultas reales en MySQL, límites de fechas, FK de vehículo y servicio opcional, y que dos intentos concurrentes solo produzcan una transición.
+- [ ] **Mary — opción 7.** En `f1aaf4a` se observan el filtro de consumos cero y el manejo de EOF. Verificar ambos en una rama temporal y probar emisión con el estado facturable acordado y el impuesto configurado, rollback, consulta y una sola factura ante dos emisiones concurrentes.
 - [ ] Añadir pruebas de la vista real desde `Main` con entrada inválida, regreso y EOF. Cambiar la expectativa de aviso pendiente para la ruta que se habilita y conservar esa expectativa para las demás.
 - [ ] Ejecutar `mvn clean verify` con Java 17 y MySQL 8 aislado. Conservar la cobertura de las 207 pruebas de referencia, ejecutar las nuevas y revisar que ninguna prueba JDBC se omita. Adjuntar el SHA y los informes a #70 antes de decidir la integración definitiva.

@@ -214,27 +214,9 @@ public class RepuestoDAO {
         }
     }
 
-    @FunctionalInterface
-    private interface OperacionTransaccional {
-        int ejecutar(Connection conexion) throws SQLException;
-    }
-
-    /** Ejecuta la operación en una transacción; deshace todo si algo falla. */
-    private int enTransaccion(OperacionTransaccional operacion) throws SQLException {
-        try (Connection conexion = fuente.obtener()) {
-            boolean autoCommitOriginal = conexion.getAutoCommit();
-            conexion.setAutoCommit(false);
-            try {
-                int resultado = operacion.ejecutar(conexion);
-                conexion.commit();
-                return resultado;
-            } catch (SQLException | RuntimeException e) {
-                conexion.rollback();
-                throw e;
-            } finally {
-                conexion.setAutoCommit(autoCommitOriginal);
-            }
-        }
+    /** Ejecuta la operación en una transacción propia; deshace todo si algo falla. */
+    private int enTransaccion(Transaccion.Trabajo<Integer> operacion) throws SQLException {
+        return Transaccion.ejecutar(fuente, operacion);
     }
 
     private static Repuesto mapear(ResultSet fila) throws SQLException {
