@@ -1,6 +1,7 @@
 package com.carmotors.servicios.inventario;
 
 import com.carmotors.dao.EsquemaInventarioPrueba;
+import com.carmotors.dao.RepuestoDAO;
 import com.carmotors.dao.RepuestoNoEncontradoException;
 import com.carmotors.dao.StockInsuficienteException;
 import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
@@ -347,6 +348,43 @@ class InventarioServiciosJdbcIntegracionTest {
             assertThrows(IllegalStateException.class, () -> inventario.reservar(new ReservaRepuesto(SERVICIO_A, FILTRO, 1)));
         }
         assertEquals(STOCK_INICIAL, stock(FILTRO));
+    }
+
+    // ---------- conexiones ----------
+
+    /** Conexiones abiertas en MySQL por el usuario de pruebas, sin contar la que consulta. */
+    private int conexionesAbiertas() throws SQLException {
+        return entero("SELECT COUNT(*) - 1 FROM information_schema.PROCESSLIST "
+                + "WHERE USER = SUBSTRING_INDEX(CURRENT_USER(), '@', 1)");
+    }
+
+    @Test
+    void noQuedanConexionesAbiertasTrasOperacionesCorrectasYFallidas() throws Exception {
+        int antes = conexionesAbiertas();
+        RepuestoDAO repuestosDao = new RepuestoDAO(esquema::conectar);
+
+        for (int i = 0; i < 5; i++) {
+            reservar(SERVICIO_A, FILTRO, 1);
+            consumir(SERVICIO_A, FILTRO, 1);
+            assertThrows(StockInsuficienteException.class, () -> reservar(SERVICIO_B, BUJIA, 99));
+            assertThrows(IllegalStateException.class, () -> consumir(SERVICIO_A, FILTRO, 50));
+            assertThrows(NoSuchElementException.class, () -> liberar(SERVICIO_B, FILTRO, 1));
+            assertThrows(IllegalArgumentException.class, () -> transaccion((c, inv) -> {
+                inv.reservar(new ReservaRepuesto(SERVICIO_B, BUJIA, 1));
+                throw new IllegalArgumentException("Regla de Servicios incumplida");
+            }));
+            repuestosDao.registrarEntrada(BUJIA, 1);
+            assertThrows(StockInsuficienteException.class, () -> repuestosDao.registrarSalida(BUJIA, 999));
+        }
+
+        // El servidor libera el hilo de una conexión cerrada casi de inmediato; se espera hasta 3 s.
+        int despues = conexionesAbiertas();
+        for (int intento = 0; intento < 30 && despues > antes; intento++) {
+            Thread.sleep(100);
+            despues = conexionesAbiertas();
+        }
+        assertEquals(antes, despues, "Cada operación debe cerrar su conexión, también cuando falla");
+        assertEquals(STOCK_INICIAL, totalFisico(FILTRO));
     }
 
     // ---------- concurrencia ----------
