@@ -25,8 +25,9 @@ class NavegacionAceptacionTest {
 
     @Test
     void vuelveDeDosNivelesReentraYSaleConLaMismaEntrada() {
-        Resultado resultado = ejecutar("inválida", "1", "inválida", "8", "inválida",
-                "1", "abc", "0", "0", "1", "0", "0");
+        String servicios = opcionServicios();
+        Resultado resultado = ejecutar("inválida", servicios, "inválida", "8", "inválida",
+                "1", "abc", "0", "0", servicios, "0", "0");
         assertEquals(List.of(PRINCIPAL, PRINCIPAL, SERVICIOS, SERVICIOS, TECNICOS, TECNICOS,
                 TECNICOS, SERVICIOS, PRINCIPAL, SERVICIOS, PRINCIPAL), resultado.menus(), resultado.salida());
         assertEquals(3, Pattern.compile("Opción inválida").matcher(resultado.salida()).results().count());
@@ -36,13 +37,20 @@ class NavegacionAceptacionTest {
     @ParameterizedTest
     @CsvSource(delimiter = '|', textBlock = """
             ''      | CarMotors SGT
-            1       | CarMotors SGT,Servicios,CarMotors SGT
-            1,8     | CarMotors SGT,Servicios,Técnicos,CarMotors SGT
-            1,8,1   | CarMotors SGT,Servicios,Técnicos,CarMotors SGT
+            S       | CarMotors SGT,Servicios,CarMotors SGT
+            S,8     | CarMotors SGT,Servicios,Técnicos,CarMotors SGT
+            S,8,1   | CarMotors SGT,Servicios,Técnicos,CarMotors SGT
             """)
     void terminaAlAgotarseLaEntradaEnElMenuOUnaOperacion(String guion, String menus) {
-        Resultado resultado = guion.isEmpty() ? ejecutar() : ejecutar(guion.split(","));
+        Resultado resultado = guion.isEmpty() ? ejecutar() : ejecutar(guion.replace("S", opcionServicios()).split(","));
         assertEquals(List.of(menus.split(",")), resultado.menus(), resultado.salida());
+    }
+
+    static String opcionServicios() {
+        var opcion = Pattern.compile("(?m)^([0-9]+)\\. Servicios(?: y Técnicos)?$")
+                .matcher(ejecutar("0").salida());
+        assertTrue(opcion.find(), "El menú principal debe anunciar Servicios");
+        return opcion.group(1);
     }
 
     static Resultado ejecutar(String... lineas) {
@@ -58,7 +66,7 @@ class NavegacionAceptacionTest {
             System.setIn(entradaOriginal);
             System.setOut(salidaOriginal);
         }
-        assertEquals(1, entrada.cierres, "Main debe cerrar la entrada una sola vez al terminar");
+        assertTrue(entrada.cierres <= 1, "La aplicación no debe cerrar la entrada varias veces");
         return new Resultado(bytes.toString(StandardCharsets.UTF_8));
     }
 

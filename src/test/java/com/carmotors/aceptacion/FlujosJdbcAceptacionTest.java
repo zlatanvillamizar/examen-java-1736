@@ -30,6 +30,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @Isolated
 @EnabledIfEnvironmentVariable(named = EsquemaInventarioPrueba.VARIABLE_URL, matches = ".+")
@@ -59,12 +60,9 @@ class FlujosJdbcAceptacionTest {
         try (var esquema = crearEsquema();
              var conexion = new ConexionAplicacionPrueba(urlPrueba(), esquema.nombre())) {
             int vehiculo = registrarVehiculo();
-            esquema.ejecutar("INSERT INTO mantenimiento_tipos (id, nombre) VALUES (1, 'Preventivo')");
-            esquema.ejecutar("INSERT INTO servicio_estados (id, nombre) VALUES (1, 'Recibido')");
+            int orden = registrarOrden(esquema, vehiculo, "Recibido");
             esquema.ejecutar("INSERT INTO repuesto_tipos (id, nombre) VALUES (1, 'Filtros')");
             var servicios = new ServicioControlador();
-            int orden = Math.toIntExact(servicios.registrarServicio(new Servicio(null, vehiculo, 1,
-                    LocalDateTime.of(2026, 11, 19, 12, 0), null, "Cambio de filtro", BigDecimal.TEN, 1)).valor());
             var inventario = new InventarioControlador();
             int repuesto = inventario.registrarRepuesto("Filtro", "Bosch", 1, BigDecimal.TEN, 10, 0).id();
 
@@ -93,7 +91,7 @@ class FlujosJdbcAceptacionTest {
              var conexion = new ConexionAplicacionPrueba(urlPrueba(), esquema.nombre())) {
             esquema.ejecutar("INSERT INTO mantenimiento_tipos (id, nombre) VALUES (1, 'Preventivo')");
             esquema.ejecutar("INSERT INTO servicio_estados (id, nombre) VALUES (1, 'Recibido')");
-            var resultado = NavegacionAceptacionTest.ejecutar("1", "1", "999", "1",
+            var resultado = NavegacionAceptacionTest.ejecutar(NavegacionAceptacionTest.opcionServicios(), "1", "999", "1",
                     "2026-11-19 12:00", "", "Vehículo inexistente", "100", "1", "2", "999",
                     "8", "1", "999", "0", "0", "0");
             String salida = resultado.salida();
@@ -135,6 +133,104 @@ class FlujosJdbcAceptacionTest {
             assertTrue(idsDeAlertas(ApiOpcional.invocar(nuevaConsulta,
                     "listarAlertasProximas", new Class<?>[]{int.class}, 7)).isEmpty());
         }
+    }
+
+    @Test
+    void serviciosInvocaLaRutaNormalDeReservaConsumoYLiberacion() throws Exception {
+        assumeTrue(java.util.Arrays.stream(ServicioControlador.class.getMethods())
+                .anyMatch(metodo -> metodo.getName().equals("reservarRepuesto")),
+                "Servicios aún no integra las operaciones de repuestos");
+        try (var esquema = crearEsquema();
+             var conexion = new ConexionAplicacionPrueba(urlPrueba(), esquema.nombre())) {
+            int vehiculo = registrarVehiculo();
+            int orden = registrarOrden(esquema, vehiculo, "Recibido");
+            esquema.ejecutar("INSERT INTO repuesto_tipos (id, nombre) VALUES (1, 'Filtros')");
+            var inventario = new InventarioControlador();
+            int repuesto = inventario.registrarRepuesto("Filtro", "Bosch", 1, BigDecimal.TEN, 10, 0).id();
+
+            var salida = NavegacionAceptacionTest.ejecutar(NavegacionAceptacionTest.opcionServicios(),
+                    "9", Integer.toString(orden), Integer.toString(repuesto), "5",
+                    "10", Integer.toString(orden), Integer.toString(repuesto), "2",
+                    "11", Integer.toString(orden), Integer.toString(repuesto), "3", "0", "0").salida();
+            assertFalse(salida.contains("Error de base de datos"), salida);
+            assertFalse(salida.contains("Validación:"), salida);
+            assertEquals(8, inventario.buscarRepuesto(repuesto).orElseThrow().cantidadStock());
+            assertEquals(List.of(0, 2), reservas(esquema, orden, repuesto));
+        }
+    }
+
+    @Test
+    void emiteFacturaConsultaYPreservaUnaSolaFacturaPorServicio() throws Exception {
+        var tipo = controladorFacturas();
+        try (var esquema = crearConsolidado();
+             var conexion = new ConexionAplicacionPrueba(urlPrueba(), esquema.nombre())) {
+            int orden = registrarOrden(esquema, registrarVehiculo(), "Completado");
+            registrarLineaDeRepuestos(esquema, orden, 2);
+            Object facturas = tipo.getConstructor().newInstance();
+            Class<?>[] idNumerico = {int.class};
+            Object factura = ApiOpcional.invocar(facturas, "crear", idNumerico, orden);
+            int id = (int) ApiOpcional.invocar(factura, "getId", SIN_ARGUMENTOS);
+            var consulta = (Optional<?>) ApiOpcional.invocar(tipo.getConstructor().newInstance(),
+                    "buscarPorId", idNumerico, id);
+            assertEquals(orden, ApiOpcional.invocar(consulta.orElseThrow(), "getServicioId", SIN_ARGUMENTOS));
+            assertEquals(new BigDecimal("30.00"),
+                    ApiOpcional.invocar(consulta.orElseThrow(), "getTotalFinal", SIN_ARGUMENTOS));
+            assertThrows(IllegalStateException.class,
+                    () -> ApiOpcional.invocar(facturas, "crear", idNumerico, orden));
+            var duplicado = assertThrows(SQLIntegrityConstraintViolationException.class, () -> esquema.ejecutar(
+                    "INSERT INTO facturas (servicio_id, fecha_emision, total_repuestos, "
+                    + "total_mano_obra, impuestos, total_final) SELECT servicio_id, fecha_emision, "
+                    + "total_repuestos, total_mano_obra, impuestos, total_final FROM facturas WHERE id = " + id));
+            assertEquals(1062, duplicado.getErrorCode());
+            assertEquals(1, ((List<?>) ApiOpcional.invocar(facturas, "listar", SIN_ARGUMENTOS)).size());
+        }
+    }
+
+    @Test
+    void facturaIgnoraUnaLineaLiberadaQueNoTuvoConsumo() throws Exception {
+        var tipo = controladorFacturas();
+        try (var esquema = crearConsolidado();
+             var conexion = new ConexionAplicacionPrueba(urlPrueba(), esquema.nombre())) {
+            int orden = registrarOrden(esquema, registrarVehiculo(), "Completado");
+            registrarLineaDeRepuestos(esquema, orden, 0);
+
+            Object controlador = tipo.getConstructor().newInstance();
+            Object factura = assertDoesNotThrow(
+                    () -> ApiOpcional.invocar(controlador, "crear", new Class<?>[]{int.class}, orden));
+            assertEquals(new BigDecimal("10.00"), ApiOpcional.invocar(factura, "getTotalFinal", SIN_ARGUMENTOS));
+            assertTrue(((List<?>) ApiOpcional.invocar(factura, "getDetalles", SIN_ARGUMENTOS)).isEmpty());
+        }
+    }
+
+    private Class<?> controladorFacturas() throws ClassNotFoundException {
+        assumeTrue(Files.isRegularFile(Path.of("database", "esquema", "esquema.sql")),
+                "Falta el esquema consolidado de Facturación");
+        var tipo = ApiOpcional.clase("com.carmotors.controlador.FacturaControlador");
+        assumeTrue(java.util.Arrays.stream(tipo.getMethods()).anyMatch(metodo -> metodo.getName().equals("crear")),
+                "Falta la API de emisión de Facturación");
+        return tipo;
+    }
+
+    private EsquemaInventarioPrueba crearConsolidado() throws Exception {
+        urlPrueba();
+        return (EsquemaInventarioPrueba) EsquemaInventarioPrueba.class.getMethod("crearConsolidado").invoke(null);
+    }
+
+    private void registrarLineaDeRepuestos(EsquemaInventarioPrueba esquema, int orden, int usadas)
+            throws SQLException {
+        esquema.ejecutar("INSERT INTO repuesto_tipos (id, nombre) VALUES (1, 'Filtros')");
+        var inventario = new InventarioControlador();
+        int repuesto = inventario.registrarRepuesto("Filtro", "Bosch", 1, BigDecimal.TEN, 10, 0).id();
+        esquema.ejecutar("INSERT INTO servicios_repuestos "
+                + "(servicio_id, repuesto_id, cantidad_reservada, cantidad_usada, precio_unitario_venta) VALUES ("
+                + orden + ", " + repuesto + ", 0, " + usadas + ", 10)");
+    }
+
+    private int registrarOrden(EsquemaInventarioPrueba esquema, int vehiculo, String estado) throws SQLException {
+        esquema.ejecutar("INSERT INTO mantenimiento_tipos (id, nombre) VALUES (1, 'Preventivo')");
+        esquema.ejecutar("INSERT INTO servicio_estados (id, nombre) VALUES (1, '" + estado + "')");
+        return Math.toIntExact(new ServicioControlador().registrarServicio(new Servicio(null, vehiculo, 1,
+                LocalDateTime.of(2026, 11, 19, 12, 0), null, "Cambio de filtro", BigDecimal.TEN, 1)).valor());
     }
 
     private static List<Integer> idsDeAlertas(Object resultado) throws Exception {
