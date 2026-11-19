@@ -5,6 +5,7 @@ import com.carmotors.dao.RepuestoDAO;
 import com.carmotors.dao.RepuestoNoEncontradoException;
 import com.carmotors.dao.ReservaRepuestoDAO;
 import com.carmotors.dao.StockInsuficienteException;
+import com.carmotors.dao.Transaccion;
 import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
 import com.carmotors.servicio.taller.integracion.InventarioServiciosPort;
 import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
@@ -76,26 +77,9 @@ public final class InventarioServiciosJdbc implements InventarioServiciosPort {
      */
     public static <T> T ejecutarEnTransaccion(FuenteConexion fuente, OperacionConInventario<T> operacion)
             throws SQLException {
-        Objects.requireNonNull(fuente);
-        Objects.requireNonNull(operacion);
-        try (Connection conexion = fuente.obtener()) {
-            boolean autoCommitOriginal = conexion.getAutoCommit();
-            conexion.setAutoCommit(false);
-            try {
-                T resultado = operacion.ejecutar(conexion, new InventarioServiciosJdbc(conexion));
-                conexion.commit();
-                return resultado;
-            } catch (SQLException | RuntimeException | Error e) {
-                try {
-                    conexion.rollback();
-                } catch (SQLException errorRollback) {
-                    e.addSuppressed(errorRollback);
-                }
-                throw e;
-            } finally {
-                conexion.setAutoCommit(autoCommitOriginal);
-            }
-        }
+        Objects.requireNonNull(operacion, "La operación es obligatoria");
+        return Transaccion.ejecutar(fuente, conexion ->
+                operacion.ejecutar(conexion, new InventarioServiciosJdbc(conexion)));
     }
 
     @Override
