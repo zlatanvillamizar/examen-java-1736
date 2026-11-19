@@ -3,10 +3,11 @@ package com.carmotors.dao;
 import com.carmotors.config.ConexionFactory;
 import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
-import com.carmotors.servicios.RepositorioConsultaOrdenServicio;
-import com.carmotors.servicios.dominio.IdentificadorServicio;
+import com.carmotors.servicio.taller.RepositorioConsultaOrdenServicio;
+import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
 
 import java.sql.ResultSet;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
@@ -22,13 +23,18 @@ public class ServicioDAO implements RepositorioConsultaOrdenServicio<Identificad
             """;
 
     public IdentificadorServicio registrar(Servicio servicio) throws SQLException {
+        try (var conexion = ConexionFactory.obtenerConexion()) {
+            return registrar(conexion, servicio);
+        }
+    }
+
+    public IdentificadorServicio registrar(Connection conexion, Servicio servicio) throws SQLException {
         String sql = """
                 INSERT INTO servicios (vehiculo_id, mantenimiento_tipo_id, fecha_recepcion,
                     fecha_entrega, descripcion_problema, costo_mano_obra, estado_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """;
-        try (var conexion = ConexionFactory.obtenerConexion();
-             var sentencia = conexion.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (var sentencia = conexion.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             sentencia.setInt(1, servicio.vehiculoId());
             sentencia.setInt(2, servicio.mantenimientoTipoId());
             sentencia.setObject(3, servicio.fechaRecepcion());
@@ -75,12 +81,46 @@ public class ServicioDAO implements RepositorioConsultaOrdenServicio<Identificad
     }
 
     public boolean actualizarEstado(IdentificadorServicio id, int estadoId) throws SQLException {
+        try (var conexion = ConexionFactory.obtenerConexion()) {
+            return actualizarEstado(conexion, id, estadoId);
+        }
+    }
+
+    public boolean actualizarEstado(Connection conexion, IdentificadorServicio id, int estadoId)
+            throws SQLException {
         String sql = "UPDATE servicios SET estado_id = ? WHERE id = ?";
-        try (var conexion = ConexionFactory.obtenerConexion();
-             var sentencia = conexion.prepareStatement(sql)) {
+        try (var sentencia = conexion.prepareStatement(sql)) {
             sentencia.setInt(1, estadoId);
             sentencia.setLong(2, id.valor());
             return sentencia.executeUpdate() != 0;
+        }
+    }
+
+    public Optional<Integer> bloquearEstadoActual(Connection conexion, IdentificadorServicio id)
+            throws SQLException {
+        try (var sentencia = conexion.prepareStatement("SELECT estado_id FROM servicios WHERE id = ? FOR UPDATE")) {
+            sentencia.setLong(1, id.valor());
+            try (var filas = sentencia.executeQuery()) {
+                return filas.next() ? Optional.of(filas.getInt(1)) : Optional.empty();
+            }
+        }
+    }
+
+    public boolean tieneFactura(Connection conexion, IdentificadorServicio id) throws SQLException {
+        try (var sentencia = conexion.prepareStatement("SELECT 1 FROM facturas WHERE servicio_id = ?")) {
+            sentencia.setLong(1, id.valor());
+            try (var filas = sentencia.executeQuery()) {
+                return filas.next();
+            }
+        }
+    }
+
+    public Optional<String> buscarNombreEstado(Connection conexion, int estadoId) throws SQLException {
+        try (var sentencia = conexion.prepareStatement("SELECT nombre FROM servicio_estados WHERE id = ?")) {
+            sentencia.setInt(1, estadoId);
+            try (var filas = sentencia.executeQuery()) {
+                return filas.next() ? Optional.of(filas.getString(1)) : Optional.empty();
+            }
         }
     }
 
