@@ -1,5 +1,7 @@
 package com.carmotors.servicio.taller;
 
+import com.carmotors.config.ConexionFactory;
+import com.carmotors.dao.FuenteConexion;
 import com.carmotors.dao.ServicioDAO;
 import com.carmotors.dao.TecnicoDAO;
 import com.carmotors.modelo.Servicio;
@@ -7,17 +9,25 @@ import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
 import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
 import com.carmotors.servicio.taller.dominio.IdentificadorVehiculo;
+import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
+import com.carmotors.servicio.taller.integracion.InventarioServiciosPort;
+import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
+import com.carmotors.servicios.inventario.InventarioServiciosJdbc;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 public final class ServicioService {
     private final ServicioDAO servicios;
     private final TecnicoDAO tecnicos;
+    private final FuenteConexion fuente;
     private final ConsultaOrdenServicio<IdentificadorServicio, Servicio> consulta;
 
     public ServicioService() {
@@ -25,12 +35,49 @@ public final class ServicioService {
     }
 
     public ServicioService(ServicioDAO servicios, TecnicoDAO tecnicos) {
+        this(servicios, tecnicos, ConexionFactory::obtenerConexion);
+    }
+
+    public ServicioService(ServicioDAO servicios, TecnicoDAO tecnicos, FuenteConexion fuente) {
         this.servicios = Objects.requireNonNull(servicios);
         this.tecnicos = Objects.requireNonNull(tecnicos);
+        this.fuente = Objects.requireNonNull(fuente);
         this.consulta = new ConsultaOrdenServicio<>(servicios);
     }
 
     public IdentificadorServicio registrarServicio(Servicio solicitud) throws SQLException {
+        validarAlta(solicitud);
+        return servicios.registrar(solicitud);
+    }
+
+    public IdentificadorServicio registrarServicioConReservas(Servicio solicitud, List<RepuestoSolicitado> repuestos)
+            throws SQLException {
+        validarAlta(solicitud);
+        List<RepuestoSolicitado> lineas = List.copyOf(repuestos).stream()
+                .sorted(Comparator.comparingInt(RepuestoSolicitado::repuestoId)).toList();
+        return enTransaccion((conexion, inventario) -> {
+            if (!lineas.isEmpty()) {
+                validarOrdenOperativa(nombreEstado(conexion, solicitud.estadoId()));
+            }
+            IdentificadorServicio id = servicios.registrar(conexion, solicitud);
+            for (RepuestoSolicitado linea : lineas) {
+                inventario.reservar(new ReservaRepuesto(Math.toIntExact(id.valor()),
+                        linea.repuestoId(), linea.cantidad()));
+            }
+            return id;
+        });
+    }
+
+    public record RepuestoSolicitado(int repuestoId, int cantidad) {
+        public RepuestoSolicitado {
+            validarId(repuestoId, "repuesto");
+            if (cantidad <= 0) {
+                throw new IllegalArgumentException("La cantidad debe ser positiva");
+            }
+        }
+    }
+
+    private static void validarAlta(Servicio solicitud) {
         if (solicitud == null || solicitud.id() != null || solicitud.fechaRecepcion() == null) {
             throw new IllegalArgumentException("El alta requiere fecha de recepción y un ID por generar");
         }
@@ -44,7 +91,6 @@ public final class ServicioService {
             throw new IllegalArgumentException("El costo de mano de obra debe ser no negativo");
         }
         validarFechaEntrega(solicitud.fechaRecepcion(), solicitud.fechaEntrega());
-        return servicios.registrar(solicitud);
     }
 
     public Optional<Servicio> buscarPorId(int id) {
@@ -58,9 +104,80 @@ public final class ServicioService {
     public void actualizarEstado(int id, int estadoId) throws SQLException {
         IdentificadorServicio servicioId = new IdentificadorServicio(id);
         validarId(estadoId, "estado");
-        if (!servicios.actualizarEstado(servicioId, estadoId)) {
-            throw servicioInexistente(id);
+        enTransaccion((conexion, inventario) -> {
+            bloquearOrden(conexion, servicioId);
+            String destino = nombreEstado(conexion, estadoId);
+            if (cancelado(destino)) {
+                inventario.liberarTodo(id);
+            }
+            servicios.actualizarEstado(conexion, servicioId, estadoId);
+            return null;
+        });
+    }
+
+    public void reservarRepuesto(ReservaRepuesto solicitud) throws SQLException {
+        moverRepuesto(solicitud.servicioId(), inventario -> inventario.reservar(solicitud));
+    }
+
+    public void consumirRepuesto(ConsumoRepuesto solicitud) throws SQLException {
+        moverRepuesto(solicitud.servicioId(), inventario -> inventario.consumir(solicitud));
+    }
+
+    public void liberarRepuesto(ReservaRepuesto solicitud) throws SQLException {
+        moverRepuesto(solicitud.servicioId(), inventario -> inventario.liberar(solicitud));
+    }
+
+    private void moverRepuesto(int id, Consumer<InventarioServiciosPort> movimiento)
+            throws SQLException {
+        enTransaccion((conexion, inventario) -> {
+            int estadoActual = bloquearOrden(conexion, new IdentificadorServicio(id));
+            validarOrdenOperativa(nombreEstado(conexion, estadoActual));
+            movimiento.accept(inventario);
+            return null;
+        });
+    }
+
+    private int bloquearOrden(Connection conexion, IdentificadorServicio id) throws SQLException {
+        return servicios.bloquearEstadoActual(conexion, id)
+                .orElseThrow(() -> servicioInexistente(Math.toIntExact(id.valor())));
+    }
+
+    private String nombreEstado(Connection conexion, int estadoId) throws SQLException {
+        return servicios.buscarNombreEstado(conexion, estadoId)
+                .orElseThrow(() -> new NoSuchElementException("No existe el estado " + estadoId));
+    }
+
+    private static boolean cancelado(String estado) {
+        return "Cancelado".equalsIgnoreCase(estado.strip()) || "Cancelada".equalsIgnoreCase(estado.strip());
+    }
+
+    private static void validarOrdenOperativa(String estado) {
+        if (cancelado(estado)) {
+            throw new IllegalStateException("La orden está cancelada");
         }
+    }
+
+    private <T> T enTransaccion(OperacionInventario<T> operacion) throws SQLException {
+        try (Connection conexion = fuente.obtener()) {
+            conexion.setAutoCommit(false);
+            try {
+                T resultado = operacion.ejecutar(conexion, new InventarioServiciosJdbc(conexion));
+                conexion.commit();
+                return resultado;
+            } catch (SQLException | RuntimeException | Error error) {
+                try {
+                    conexion.rollback();
+                } catch (SQLException falloRollback) {
+                    error.addSuppressed(falloRollback);
+                }
+                throw error;
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface OperacionInventario<T> {
+        T ejecutar(Connection conexion, InventarioServiciosJdbc inventario) throws SQLException;
     }
 
     public void actualizarFechaEntrega(int id, LocalDateTime fechaEntrega) throws SQLException {

@@ -1,9 +1,12 @@
 package com.carmotors.vista;
 
 import com.carmotors.controlador.ServicioControlador;
+import com.carmotors.dao.StockInsuficienteException;
 import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
+import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
+import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
 
 import java.io.PrintStream;
 import java.math.BigDecimal;
@@ -42,6 +45,9 @@ final class VistaServicios {
                     6. Registrar técnico
                     7. Asignar técnico
                     8. Gestión de técnicos
+                    9. Reservar repuestos
+                    10. Consumir repuestos
+                    11. Liberar repuestos
                     0. Volver al menú principal""");
             try {
                 String opcion = leer("Opción");
@@ -58,13 +64,21 @@ final class VistaServicios {
                         case "6" -> registrarTecnico();
                         case "7" -> asignarTecnico();
                         case "8" -> mostrarMenuTecnicos();
-                        default -> salida.println("Opción inválida. Elija un número entre 0 y 8.");
+                        case "9" -> controlador.reservarRepuesto(leerReserva());
+                        case "10" -> controlador.consumirRepuesto(new ConsumoRepuesto(
+                                entero("ID de la orden"), entero("ID del repuesto"), entero("Cantidad")));
+                        case "11" -> controlador.liberarRepuesto(leerReserva());
+                        default -> salida.println("Opción inválida. Elija un número entre 0 y 11.");
                     }
                 });
             } catch (FinEntrada e) {
                 return;
             }
         }
+    }
+
+    private ReservaRepuesto leerReserva() {
+        return new ReservaRepuesto(entero("ID de la orden"), entero("ID del repuesto"), entero("Cantidad"));
     }
 
     private void mostrarMenuTecnicos() {
@@ -95,7 +109,7 @@ final class VistaServicios {
     private void ejecutar(Operacion operacion) {
         try {
             operacion.ejecutar();
-        } catch (IllegalArgumentException | NoSuchElementException e) {
+        } catch (IllegalArgumentException | NoSuchElementException | StockInsuficienteException e) {
             salida.println("Validación: " + e.getMessage());
         } catch (SQLException e) {
             salida.println("Error de base de datos. Revise los datos ingresados y la conexión.");

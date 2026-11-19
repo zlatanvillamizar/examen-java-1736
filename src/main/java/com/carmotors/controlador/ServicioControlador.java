@@ -5,6 +5,8 @@ import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
 import com.carmotors.servicio.taller.ServicioService;
 import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
+import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
+import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
@@ -41,6 +43,18 @@ public final class ServicioControlador {
 
     public void actualizarEstado(int servicioId, int estadoId) throws SQLException {
         servicio.actualizarEstado(servicioId, estadoId);
+    }
+
+    public void reservarRepuesto(ReservaRepuesto solicitud) throws SQLException {
+        servicio.reservarRepuesto(solicitud);
+    }
+
+    public void consumirRepuesto(ConsumoRepuesto solicitud) throws SQLException {
+        servicio.consumirRepuesto(solicitud);
+    }
+
+    public void liberarRepuesto(ReservaRepuesto solicitud) throws SQLException {
+        servicio.liberarRepuesto(solicitud);
     }
 
     public void actualizarFechaEntrega(int servicioId, LocalDateTime fechaEntrega) throws SQLException {
