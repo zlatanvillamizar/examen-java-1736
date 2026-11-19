@@ -30,7 +30,7 @@ public class RecordatorioDAO {
             "SELECT * FROM recordatorios_mantenimiento WHERE vehiculo_id = ? "
                     + "ORDER BY fecha_proximo_mantenimiento";
     private static final String UPDATE_NOTIFICADO =
-            "UPDATE recordatorios_mantenimiento SET notificado = TRUE WHERE id = ?";
+            "UPDATE recordatorios_mantenimiento SET notificado = TRUE WHERE id = ? AND notificado = FALSE";
 
     // ---------- consultas de alertas (derivadas, sin tablas nuevas) ----------
     private static final String SELECT_VENCIDOS =
