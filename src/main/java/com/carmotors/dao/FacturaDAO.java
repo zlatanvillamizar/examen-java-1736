@@ -41,7 +41,8 @@ public class FacturaDAO {
             "SELECT sr.repuesto_id, r.nombre, sr.cantidad_usada, sr.precio_unitario_venta "
                     + "FROM servicios_repuestos sr "
                     + "JOIN repuestos r ON r.id = sr.repuesto_id "
-                    + "WHERE sr.servicio_id = ? ORDER BY sr.repuesto_id";
+                    + "WHERE sr.servicio_id = ? AND sr.cantidad_usada > 0 "
+                    + "ORDER BY sr.repuesto_id";
 
     /** Inserta la factura dentro de una transacción (commit, o rollback si falla). */
     public Factura crear(Factura f) throws SQLException {
@@ -62,10 +63,17 @@ public class FacturaDAO {
                 con.commit();
                 return f;
             } catch (SQLException e) {
-                con.rollback();
+                try {
+                    con.rollback();
+                } catch (SQLException rollbackEx) {
+                    e.addSuppressed(rollbackEx);
+                }
                 throw e;
             } finally {
-                con.setAutoCommit(autoCommit);
+                try {
+                    con.setAutoCommit(autoCommit);
+                } catch (SQLException ignored) {
+                }
             }
         }
     }
@@ -127,9 +135,15 @@ public class FacturaDAO {
             ps.setInt(1, servicioId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
+                    int cantidadUsada = rs.getInt("cantidad_usada");
+                    if (cantidadUsada <= 0) {
+                        continue;
+                    }
                     lista.add(new DetalleFactura(
-                            rs.getInt("repuesto_id"), rs.getString("nombre"),
-                            rs.getInt("cantidad_usada"), rs.getBigDecimal("precio_unitario_venta")));
+                            rs.getInt("repuesto_id"),
+                            rs.getString("nombre"),
+                            cantidadUsada,
+                            rs.getBigDecimal("precio_unitario_venta")));
                 }
             }
         }

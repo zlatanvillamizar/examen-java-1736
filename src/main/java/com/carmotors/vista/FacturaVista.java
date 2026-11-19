@@ -5,6 +5,8 @@ import com.carmotors.modelo.DetalleFactura;
 import com.carmotors.modelo.Factura;
 
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Scanner;
 
 public class FacturaVista {
@@ -17,8 +19,8 @@ public class FacturaVista {
     }
 
     public FacturaVista(FacturaControlador controlador, Scanner scanner) {
-        this.controlador = controlador;
-        this.scanner = scanner;
+        this.controlador = Objects.requireNonNull(controlador, "El controlador es obligatorio");
+        this.scanner = Objects.requireNonNull(scanner, "El scanner es obligatorio");
     }
 
     public void mostrarMenu() {
@@ -86,8 +88,16 @@ public class FacturaVista {
     private int leerEntero(String mensaje) {
         while (true) {
             System.out.print(mensaje);
+            if (!scanner.hasNextLine()) {
+                System.out.println();
+                return 0;
+            }
             try {
-                return Integer.parseInt(scanner.nextLine().trim());
+                String linea = scanner.nextLine().trim();
+                return Integer.parseInt(linea);
+            } catch (NoSuchElementException e) {
+                System.out.println();
+                return 0;
             } catch (NumberFormatException e) {
                 System.out.println("Ingrese un número válido.");
             }
