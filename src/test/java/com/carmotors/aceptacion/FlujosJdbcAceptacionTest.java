@@ -27,6 +27,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -199,6 +203,63 @@ class FlujosJdbcAceptacionTest {
                     () -> ApiOpcional.invocar(controlador, "crear", new Class<?>[]{int.class}, orden));
             assertEquals(new BigDecimal("10.00"), ApiOpcional.invocar(factura, "getTotalFinal", SIN_ARGUMENTOS));
             assertTrue(((List<?>) ApiOpcional.invocar(factura, "getDetalles", SIN_ARGUMENTOS)).isEmpty());
+        }
+    }
+
+    @Test
+    void facturaUnaSolaVezBajoCompetenciaTrasConsumirUnaReservaReal() throws Exception {
+        var tipo = controladorFacturas();
+        try (var esquema = crearConsolidado();
+             var conexion = new ConexionAplicacionPrueba(urlPrueba(), esquema.nombre())) {
+            int vehiculo = registrarVehiculo();
+            int orden = registrarOrden(esquema, vehiculo, "Recibido");
+            esquema.ejecutar("INSERT INTO servicio_estados (id, nombre) VALUES (2, 'Completado')");
+            esquema.ejecutar("INSERT INTO repuesto_tipos (id, nombre) VALUES (1, 'Filtros')");
+            var inventario = new InventarioControlador();
+            int repuesto = inventario.registrarRepuesto("Filtro", "Bosch", 1, BigDecimal.TEN, 10, 0).id();
+            var servicios = new ServicioControlador();
+            ApiOpcional.invocar(servicios, "reservarRepuesto", new Class<?>[]{ReservaRepuesto.class},
+                    new ReservaRepuesto(orden, repuesto, 5));
+            ApiOpcional.invocar(servicios, "consumirRepuesto", new Class<?>[]{ConsumoRepuesto.class},
+                    new ConsumoRepuesto(orden, repuesto, 2));
+            ApiOpcional.invocar(servicios, "liberarRepuesto", new Class<?>[]{ReservaRepuesto.class},
+                    new ReservaRepuesto(orden, repuesto, 3));
+            servicios.actualizarEstado(orden, 2);
+            assertEquals(vehiculo, servicios.buscarServicio(orden).orElseThrow().vehiculoId());
+            assertEquals(8, inventario.buscarRepuesto(repuesto).orElseThrow().cantidadStock());
+            assertEquals(List.of(0, 2), reservas(esquema, orden, repuesto));
+
+            var inicio = new CyclicBarrier(2);
+            Callable<Boolean> emitir = () -> {
+                var controlador = tipo.getConstructor().newInstance();
+                inicio.await(10, TimeUnit.SECONDS);
+                try {
+                    ApiOpcional.invocar(controlador, "crear", new Class<?>[]{int.class}, orden);
+                    return true;
+                } catch (SQLIntegrityConstraintViolationException e) {
+                    assertEquals(1062, e.getErrorCode());
+                    return false;
+                } catch (IllegalStateException e) {
+                    assertTrue(e.getMessage().contains("ya tiene factura"), e.getMessage());
+                    return false;
+                }
+            };
+            var ejecutor = Executors.newFixedThreadPool(2);
+            try {
+                var primera = ejecutor.submit(emitir);
+                var segunda = ejecutor.submit(emitir);
+                assertNotEquals(primera.get(15, TimeUnit.SECONDS),
+                        segunda.get(15, TimeUnit.SECONDS),
+                        "Exactamente una emisión debe tener éxito");
+            } finally {
+                ejecutor.shutdownNow();
+                assertTrue(ejecutor.awaitTermination(10, TimeUnit.SECONDS));
+            }
+            var facturas = (List<?>) ApiOpcional.invocar(tipo.getConstructor().newInstance(), "listar", SIN_ARGUMENTOS);
+            assertEquals(1, facturas.size());
+            assertEquals(orden, ApiOpcional.invocar(facturas.get(0), "getServicioId", SIN_ARGUMENTOS));
+            assertEquals(new BigDecimal("30.00"),
+                    ApiOpcional.invocar(facturas.get(0), "getTotalFinal", SIN_ARGUMENTOS));
         }
     }
 
