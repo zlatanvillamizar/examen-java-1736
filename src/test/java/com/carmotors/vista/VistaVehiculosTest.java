@@ -101,6 +101,19 @@ class VistaVehiculosTest {
     }
 
     @Test
+    void validaLasLongitudesDelEsquemaAntesDeRegistrar() {
+        String textoLargo = "á".repeat(51);
+        String datos = "1\n3\nABC123\n" + textoLargo + "\n3\n2020\n"
+                + "1\n3\nABC123\nMazda\n" + textoLargo + "\n2020\n0\n";
+        try (Scanner entrada = new Scanner(datos)) {
+            String salida = mostrar(entrada);
+            assertTrue(salida.contains("La marca debe tener como máximo 50 caracteres"));
+            assertTrue(salida.contains("El modelo debe tener como máximo 50 caracteres"));
+            assertNull(registrado);
+        }
+    }
+
+    @Test
     void informaErrorJdbcYContinua() {
         try (Scanner entrada = new Scanner("2\n99\n4\n0\n")) {
             String salida = mostrar(entrada);
