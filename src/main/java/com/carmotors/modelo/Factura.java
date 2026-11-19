@@ -14,7 +14,7 @@ public class Factura {
     private BigDecimal impuestos = BigDecimal.ZERO;
     private BigDecimal totalFinal = BigDecimal.ZERO;
 
-    // No persistidos: se completan desde servicios_repuestos, vehículo y cliente.
+    private boolean detalleHistorico = true;
     private List<DetalleFactura> detalles = new ArrayList<>();
     private String clienteNombre;
     private String clienteDocumento;
@@ -34,6 +34,8 @@ public class Factura {
     public void setImpuestos(BigDecimal impuestos) { this.impuestos = impuestos; }
     public BigDecimal getTotalFinal() { return totalFinal; }
     public void setTotalFinal(BigDecimal totalFinal) { this.totalFinal = totalFinal; }
+    public boolean isDetalleHistorico() { return detalleHistorico; }
+    public void setDetalleHistorico(boolean detalleHistorico) { this.detalleHistorico = detalleHistorico; }
     public List<DetalleFactura> getDetalles() { return detalles; }
     public void setDetalles(List<DetalleFactura> detalles) {
         this.detalles = detalles == null ? new ArrayList<>() : new ArrayList<>(detalles);

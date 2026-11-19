@@ -1,6 +1,9 @@
 package com.carmotors.dao;
 
 import com.carmotors.modelo.Factura;
+import com.carmotors.servicio.taller.ServicioService;
+import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
+import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
 import com.carmotors.servicios.facturacion.FacturaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -56,6 +59,11 @@ class FacturaJdbcTest {
         }
         assertEquals(0, factura.getId());
         assertTrue(dao.buscarPorServicio(id).isEmpty());
+        try (var con = esquema.conectar(); var st = con.createStatement();
+             var filas = st.executeQuery("SELECT COUNT(*) FROM factura_detalles")) {
+            assertTrue(filas.next());
+            assertEquals(0, filas.getInt(1));
+        }
 
         var pool = Executors.newFixedThreadPool(2);
         var inicio = new CountDownLatch(1);
@@ -102,6 +110,43 @@ class FacturaJdbcTest {
             assertEquals(new BigDecimal("0.00"), factura.getTotalRepuestos());
             assertEquals(factura.getTotalManoObra(), factura.getTotalFinal());
             assertEquals(factura.getId(), dao.buscarPorServicio(id).orElseThrow().getId());
+        }
+    }
+
+    @Test
+    void rechazaUnaEmisionDesactualizadaYCongelaElDetalleSinImpedirLiberarStock() throws Exception {
+        try (var esquema = EsquemaMaryPrueba.crear()) {
+            int orden = crearServicio(esquema);
+            agregarRepuestos(esquema, orden);
+            var dao = new FacturaDAO(esquema::conectar);
+            var facturas = new FacturaService(dao, BigDecimal.ZERO);
+            var servicios = new ServicioService(new ServicioDAO(), new TecnicoDAO(), esquema::conectar);
+            int repuesto = dao.buscarServicioFacturable(orden).orElseThrow().detalles().get(0).repuestoId();
+            try (var con = esquema.conectar(); var st = con.createStatement()) {
+                st.executeUpdate("UPDATE repuestos SET cantidad_stock = 5 WHERE id = " + repuesto);
+            }
+            servicios.reservarRepuesto(new ReservaRepuesto(orden, repuesto, 3));
+            Factura anterior = facturas.calcular(dao.buscarServicioFacturable(orden).orElseThrow());
+            servicios.consumirRepuesto(new ConsumoRepuesto(orden, repuesto, 1));
+            assertThrows(IllegalStateException.class, () -> dao.crear(anterior));
+            assertTrue(dao.buscarPorServicio(orden).isEmpty());
+
+            Factura emitida = facturas.crear(orden);
+            var rechazo = assertThrows(IllegalStateException.class,
+                    () -> servicios.consumirRepuesto(new ConsumoRepuesto(orden, repuesto, 1)));
+            assertTrue(rechazo.getMessage().contains("ya está facturada"));
+            servicios.liberarRepuesto(new ReservaRepuesto(orden, repuesto, 2));
+            try (var con = esquema.conectar(); var st = con.createStatement()) {
+                try (var filas = st.executeQuery("SELECT cantidad_stock FROM repuestos WHERE id = " + repuesto)) {
+                    assertTrue(filas.next());
+                    assertEquals(4, filas.getInt(1));
+                }
+                st.executeUpdate("UPDATE repuestos SET nombre = 'Nombre posterior' WHERE id = " + repuesto);
+            }
+            Factura consultada = facturas.buscarPorId(emitida.getId()).orElseThrow();
+            assertEquals(emitida.getDetalles(), consultada.getDetalles());
+            assertEquals(new BigDecimal("60.00"), consultada.getTotalRepuestos());
+            assertEquals(new BigDecimal("160.00"), consultada.getTotalFinal());
         }
     }
 

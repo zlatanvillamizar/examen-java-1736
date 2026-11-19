@@ -116,22 +116,26 @@ public final class ServicioService {
     }
 
     public void reservarRepuesto(ReservaRepuesto solicitud) throws SQLException {
-        moverRepuesto(solicitud.servicioId(), inventario -> inventario.reservar(solicitud));
+        moverRepuesto(solicitud.servicioId(), false, inventario -> inventario.reservar(solicitud));
     }
 
     public void consumirRepuesto(ConsumoRepuesto solicitud) throws SQLException {
-        moverRepuesto(solicitud.servicioId(), inventario -> inventario.consumir(solicitud));
+        moverRepuesto(solicitud.servicioId(), true, inventario -> inventario.consumir(solicitud));
     }
 
     public void liberarRepuesto(ReservaRepuesto solicitud) throws SQLException {
-        moverRepuesto(solicitud.servicioId(), inventario -> inventario.liberar(solicitud));
+        moverRepuesto(solicitud.servicioId(), false, inventario -> inventario.liberar(solicitud));
     }
 
-    private void moverRepuesto(int id, Consumer<InventarioServiciosPort> movimiento)
+    private void moverRepuesto(int id, boolean consumo, Consumer<InventarioServiciosPort> movimiento)
             throws SQLException {
         enTransaccion((conexion, inventario) -> {
-            int estadoActual = bloquearOrden(conexion, new IdentificadorServicio(id));
+            var orden = new IdentificadorServicio(id);
+            int estadoActual = bloquearOrden(conexion, orden);
             validarOrdenOperativa(nombreEstado(conexion, estadoActual));
+            if (consumo && servicios.tieneFactura(conexion, orden)) {
+                throw new IllegalStateException("La orden ya está facturada. No se puede modificar su consumo.");
+            }
             movimiento.accept(inventario);
             return null;
         });

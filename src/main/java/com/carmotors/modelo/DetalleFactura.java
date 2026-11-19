@@ -2,7 +2,7 @@ package com.carmotors.modelo;
 
 import java.math.BigDecimal;
 
-/** Línea de repuesto de una factura. Se deriva de servicios_repuestos; no se persiste. */
+/** Línea de repuesto de una factura. Conserva la cantidad y el precio al emitir. */
 public record DetalleFactura(int repuestoId, String nombreRepuesto,
                              int cantidad, BigDecimal precioUnitario) {
 

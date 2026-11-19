@@ -83,6 +83,9 @@ public class FacturaVista {
             System.out.println("Vehículo:  " + f.getVehiculoDescripcion());
         }
         System.out.println("--------------------------------------");
+        if (!f.isDetalleHistorico()) {
+            System.out.println("Detalle histórico no disponible para esta factura.");
+        }
         for (DetalleFactura d : f.getDetalles()) {
             System.out.printf("%-22s %3d x %10s = %10s%n", d.nombreRepuesto(), d.cantidad(),
                     d.precioUnitario().toPlainString(), d.subtotal().toPlainString());

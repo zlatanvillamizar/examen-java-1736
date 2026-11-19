@@ -87,13 +87,7 @@ public class FacturaService {
 
     public Optional<Factura> buscarPorId(int id) throws SQLException {
         validarId(id, "El ID");
-        Optional<Factura> factura = facturaDAO.buscarPorId(id);
-        if (factura.isPresent()) {
-            Factura f = factura.get();
-            facturaDAO.buscarServicioFacturable(f.getServicioId())
-                    .ifPresent(s -> enriquecer(f, s));
-        }
-        return factura;
+        return facturaDAO.buscarPorId(id);
     }
 
     public List<Factura> listar() throws SQLException {

@@ -106,6 +106,15 @@ public class ServicioDAO implements RepositorioConsultaOrdenServicio<Identificad
         }
     }
 
+    public boolean tieneFactura(Connection conexion, IdentificadorServicio id) throws SQLException {
+        try (var sentencia = conexion.prepareStatement("SELECT 1 FROM facturas WHERE servicio_id = ?")) {
+            sentencia.setLong(1, id.valor());
+            try (var filas = sentencia.executeQuery()) {
+                return filas.next();
+            }
+        }
+    }
+
     public Optional<String> buscarNombreEstado(Connection conexion, int estadoId) throws SQLException {
         try (var sentencia = conexion.prepareStatement("SELECT nombre FROM servicio_estados WHERE id = ?")) {
             sentencia.setInt(1, estadoId);

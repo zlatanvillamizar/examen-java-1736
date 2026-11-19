@@ -91,7 +91,9 @@ Ejecuta `com.carmotors.Main` desde IntelliJ tras importar el `pom.xml`, o usa el
 mvn compile org.codehaus.mojo:exec-maven-plugin:3.5.0:exec "-Dexec.executable=java" "-Dexec.args=-classpath %classpath com.carmotors.Main"
 ```
 
-El script consolidado crea clientes → vehículos → inventario → servicios → recordatorios → facturas. Los archivos de `database/bloques/` conservan el DDL de cada equipo. El bloque original de Clientes también contiene Recordatorios y requiere separarlos para una instalación desde cero. El script consolidado usa el esquema seleccionado, crea tablas y restricciones, y está destinado a una instalación nueva. Una actualización de una base existente requiere su propia migración.
+El script consolidado crea clientes → vehículos → inventario → servicios → recordatorios → facturas. Los archivos de `database/bloques/` conservan el DDL de cada equipo. El bloque original de Clientes también contiene Recordatorios y requiere separarlos para una instalación desde cero. El script consolidado usa el esquema seleccionado, crea tablas y restricciones, y está destinado a una instalación nueva. Para actualizar una instalación con el esquema anterior del proyecto, detén la aplicación y aplica una sola vez [la migración de detalle histórico](database/migraciones/001_detalle_historico_facturas.sql) sobre la base seleccionada. Conserva los importes existentes. Las facturas anteriores a la migración muestran un aviso cuando carecen del detalle original.
+
+Las nuevas facturas guardan el detalle, precios y datos de presentación en la misma transacción que sus importes. Una orden facturada rechaza consumos adicionales y conserva la posibilidad de liberar reservas pendientes.
 
 ## Módulos y arquitectura
 
