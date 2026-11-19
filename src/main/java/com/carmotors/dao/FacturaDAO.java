@@ -47,7 +47,7 @@ public class FacturaDAO {
     /** Inserta la factura dentro de una transacción (commit, o rollback si falla). */
     public Factura crear(Factura f) throws SQLException {
         try (Connection con = ConexionFactory.obtenerConexion()) {
-            boolean autoCommit = con.getAutoCommit();
+            boolean autoCommitInicial = con.getAutoCommit();
             con.setAutoCommit(false);
             try (PreparedStatement ps = con.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
                 ps.setInt(1, f.getServicioId());
@@ -61,19 +61,31 @@ public class FacturaDAO {
                     if (keys.next()) f.setId(keys.getInt(1));
                 }
                 con.commit();
+                restaurarAutoCommit(con, autoCommitInicial, null);
                 return f;
             } catch (SQLException e) {
                 try {
                     con.rollback();
                 } catch (SQLException rollbackEx) {
+                    // Error secundario al revertir: se conserva en la excepción principal.
                     e.addSuppressed(rollbackEx);
                 }
+                restaurarAutoCommit(con, autoCommitInicial, e);
                 throw e;
-            } finally {
-                try {
-                    con.setAutoCommit(autoCommit);
-                } catch (SQLException ignored) {
-                }
+            }
+        }
+    }
+
+    private void restaurarAutoCommit(Connection con, boolean autoCommitInicial, SQLException causaPrincipal)
+            throws SQLException {
+        try {
+            con.setAutoCommit(autoCommitInicial);
+        } catch (SQLException restoreEx) {
+            if (causaPrincipal != null) {
+                // Error secundario al restaurar autoCommit tras un fallo previo.
+                causaPrincipal.addSuppressed(restoreEx);
+            } else {
+                throw restoreEx;
             }
         }
     }

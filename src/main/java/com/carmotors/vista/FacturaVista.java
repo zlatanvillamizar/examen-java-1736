@@ -14,6 +14,9 @@ public class FacturaVista {
     private final FacturaControlador controlador;
     private final Scanner scanner;
 
+    private static final class EntradaEofException extends RuntimeException {
+    }
+
     public FacturaVista() {
         this(new FacturaControlador(), new Scanner(System.in));
     }
@@ -31,7 +34,12 @@ public class FacturaVista {
             System.out.println("2. Consultar factura por ID");
             System.out.println("3. Listar facturas");
             System.out.println("0. Volver");
-            opcion = leerEntero("Opción: ");
+            try {
+                opcion = leerEntero("Opción: ");
+            } catch (EntradaEofException e) {
+                System.out.println("\nEntrada finalizada (EOF). Volviendo...");
+                break;
+            }
             ejecutar(opcion);
         } while (opcion != 0);
     }
@@ -47,6 +55,8 @@ public class FacturaVista {
                 case 0 -> System.out.println("Volviendo...");
                 default -> System.out.println("Opción no válida.");
             }
+        } catch (EntradaEofException e) {
+            System.out.println("\nOperación interrumpida por fin de entrada (EOF).");
         } catch (IllegalArgumentException | IllegalStateException e) {
             System.out.println("Dato no válido: " + e.getMessage());
         } catch (Exception e) {
@@ -89,15 +99,13 @@ public class FacturaVista {
         while (true) {
             System.out.print(mensaje);
             if (!scanner.hasNextLine()) {
-                System.out.println();
-                return 0;
+                throw new EntradaEofException();
             }
             try {
                 String linea = scanner.nextLine().trim();
                 return Integer.parseInt(linea);
             } catch (NoSuchElementException e) {
-                System.out.println();
-                return 0;
+                throw new EntradaEofException();
             } catch (NumberFormatException e) {
                 System.out.println("Ingrese un número válido.");
             }
