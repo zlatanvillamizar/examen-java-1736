@@ -157,6 +157,8 @@ int devueltas = InventarioServiciosJdbc.ejecutarEnTransaccion(ConexionFactory::o
 
 ## 6. Conexión al menú principal (para Zlatan)
 
+Las instrucciones técnicas completas, con firmas reales, diff de `MenuPrincipal` y de `MenuPrincipalTest` contra `fae432b` y verificación esperada, están en **[INTEGRACION_MENU.md](INTEGRACION_MENU.md)**. Resumen:
+
 Las vistas son independientes y **esta rama no modifica `MenuPrincipal` ni `Main`**. El menú definitivo llega con el PR #70 (`integracion/carmotors-final`), que ya muestra "4. Inventario y Repuestos" y "5. Proveedores" como rutas pendientes en un `Map`. Para conectarlas basta con este cambio:
 
 ```diff
@@ -199,6 +201,7 @@ Se hicieron en copias aparte que luego se descartaron, con Java 17.0.21 y MySQL 
 | `develop` + PR #67 + esta rama + menú conectado (sobre el menú del PR #67) | 234 aprobadas, 0 fallidas, 0 omitidas |
 | PR #70 (`fae432b`) + esta rama + prueba de aceptación, sin tocar el menú | 256 aprobadas, 0 fallidas, 0 omitidas |
 | PR #70 + esta rama + prueba de aceptación + menú conectado (cambio de arriba) | 255 aprobadas, 0 fallidas, 0 omitidas |
+| PR #70 (`fae432b`) + PR #62 (`d248951`) + corrección de codificación + menú conectado + pruebas de menú de [INTEGRACION_MENU.md](INTEGRACION_MENU.md) | **261 aprobadas**, 0 fallidas, 0 omitidas |
 
 Las ramas se fusionan sin conflictos. `EsquemaInventarioPrueba` tiene en esta rama exactamente el mismo cambio que el PR #70 (`crearConsolidado()`), así que la fusión de ese archivo también es limpia.
 
@@ -215,10 +218,10 @@ Comando: `mvn clean verify` con Java 17.0.21 y Maven 3.9.11. Las pruebas JDBC so
 | Reglas de negocio y controlador | `InventarioServiceTest`, `InventarioControladorTest`, `InventarioFlujoIntegracionTest` | 31 | 31 | 0 | 3 |
 | Modelos | `RepuestoTest`, `ProveedorTest` | 17 | 17 | 0 | 0 |
 | Base de pruebas desechable | `EsquemaInventarioPruebaTest` | 3 | 3 | 0 | 3 |
-| Aceptación sobre el esquema consolidado (PR #70) | `AceptacionInventarioProveedoresTest` | 4 | 4 en la combinación con el PR #70 | 0 | 4 (también con MySQL mientras `esquema.sql` no esté en la rama) |
-| **Total Inventario y Proveedores** | | **143** | **139 en esta rama + 4 en la combinación** | **0** | **54** |
+| Aceptación sobre el esquema consolidado (PR #70) | `AceptacionInventarioProveedoresTest` | 5 | 5 en la combinación con el PR #70 | 0 | 5 (también con MySQL mientras `esquema.sql` no esté en la rama) |
+| **Total Inventario y Proveedores** | | **144** | **139 en esta rama + 5 en la combinación** | **0** | **55** |
 | Resto del proyecto | otros módulos | 75 | 75 | 0 | 0 |
-| **Total del proyecto en esta rama** | | **218** | **214** (4 omitidas: aceptación) | **0** | **54** |
+| **Total del proyecto en esta rama** | | **219** | **214** (5 omitidas: aceptación) | **0** | **55** |
 
 Las pruebas detectan errores reales. Se comprobó con mutaciones temporales, revertidas después:
 
@@ -241,10 +244,11 @@ La clase de integración del adaptador se repitió 10 veces: 10 de 10 sin fallos
 4. **Sesión 2:** con un controlador nuevo, DAO nuevos y conexiones nuevas, buscar, consultar stock y buscar el proveedor por nombre muestran los mismos datos.
 5. Una conexión SQL independiente confirma lo guardado: stock 3, tipo, precio y contacto del proveedor.
 6. Sin inicializar los tipos, el registro de un repuesto se rechaza con un mensaje claro y no guarda nada.
+7. El script guarda bien los acentos aunque el cliente use `latin1`, y repetirlo con clientes distintos no duplica tipos (`elScriptDeTiposGuardaBienLosAcentosAunqueElClienteUseOtraCodificacion`).
 
 Si las transacciones de stock hicieran `rollback` en lugar de `commit`, la prueba falla (mutación comprobada).
 
-En esta rama la prueba queda **omitida**, porque `esquema.sql` todavía no está publicado aquí. Se ejecuta sola cuando el archivo llegue con el PR #70. Hoy pasa 4 de 4 en la combinación PR #70 + esta rama.
+En esta rama la prueba queda **omitida**, porque `esquema.sql` todavía no está publicado aquí. Se ejecuta sola cuando el archivo llegue con el PR #70. Hoy pasa 5 de 5 en la combinación PR #70 + esta rama.
 
 | Verificación final | Prueba que lo demuestra |
 | --- | --- |
@@ -267,16 +271,18 @@ Se necesitan Java 17, Maven y MySQL 8.0.16 o superior. Para instalar la base, us
 El esquema solo crea la tabla `repuesto_tipos` y no inserta datos. Sin al menos un tipo, la opción "Registrar repuesto" se rechaza: *"verifique que el tipo de repuesto exista"*. Los tipos son **datos**, así que se cargan aparte con [`repuesto_tipos_iniciales.sql`](repuesto_tipos_iniciales.sql), sin tocar `esquema.sql`:
 
 ```bash
-mysql -u <usuario> -p <base> < database/esquema/esquema.sql            # una sola vez, base vacía
-mysql -u <usuario> -p <base> < docs/inventario/repuesto_tipos_iniciales.sql
+mysql --default-character-set=utf8mb4 -u <usuario> -p <base> < database/esquema/esquema.sql   # una vez, base vacía
+mysql -u <usuario> -p <base> < docs/inventario/repuesto_tipos_iniciales.sql   # repetible
 ```
 
 ```sql
+SET NAMES utf8mb4;
 INSERT INTO repuesto_tipos (nombre) VALUES
     ('Filtros'), ('Frenos'), ('Lubricantes'), ('Eléctricos'), ('Suspensión'), ('Motor')
 ON DUPLICATE KEY UPDATE nombre = nombre;
 ```
 
+- Empieza con `SET NAMES utf8mb4` porque el archivo está en UTF-8. Sin esa línea, un cliente `mysql` con `latin1` por defecto (frecuente) guardaba "Eléctricos" doblemente codificado, y al repetir el script con otro cliente se duplicaban los tipos con tilde. Este defecto se encontró y corrigió en la auditoría del 19/11/2026. Al instalar el esquema conviene usar también `--default-character-set=utf8mb4`.
 - Solo inserta filas: no tiene `CREATE`, `ALTER`, `DROP`, `TRUNCATE` ni `DELETE`.
 - Se puede repetir sin duplicar ni fallar, gracias a `uq_repuesto_tipos_nombre` y a que `ON DUPLICATE KEY UPDATE` no cambia nada. Funciona desde MySQL 8.0.16, la versión mínima del esquema.
 - La lista es una propuesta: para agregar un tipo basta con otro `INSERT INTO repuesto_tipos (nombre) VALUES ('…');`.
@@ -296,8 +302,8 @@ CARMOTORS_TEST_DB_PASSWORD=<clave_pruebas> mvn clean verify
 
 | Pendiente | Responsable |
 | --- | --- |
-| Conectar `VistaInventario` y `VistaProveedores` a las rutas 4 y 5 de `MenuPrincipal` del PR #70 (cambio y prueba listos en la sección 6). | Zlatan (Servicios / menú) |
+| Conectar `VistaInventario` y `VistaProveedores` a las rutas 4 y 5 de `MenuPrincipal` del PR #70 (instrucciones en [INTEGRACION_MENU.md](INTEGRACION_MENU.md)). | Zlatan (Servicios / menú) |
 | Usar `InventarioServiciosJdbc` desde `ServicioService` y `ServicioControlador`. | Zlatan |
 | Lotes y devoluciones (D4): fuera de esta entrega. | Fase posterior |
-| `database/esquema/esquema.sql` llega con el PR #70. La compatibilidad ya se verificó con la prueba de aceptación (4/4). Al fusionarse, la prueba deja de omitirse en esta rama. | Hecho; se repite sola tras fusionar #70 |
+| `database/esquema/esquema.sql` llega con el PR #70. La compatibilidad ya se verificó con la prueba de aceptación (5/5). Al fusionarse, la prueba deja de omitirse en esta rama. | Hecho; se repite sola tras fusionar #70 |
 | No hay pantalla para los tipos de repuesto: se cargan con `repuesto_tipos_iniciales.sql` (sección 8) y el registro pide el ID del tipo. Las tablas `lotes`, `proveedores_repuestos` y `evaluaciones_proveedor` no tienen código Java. | Fuera de esta entrega |
