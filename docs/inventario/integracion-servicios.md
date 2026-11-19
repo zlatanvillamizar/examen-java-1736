@@ -1,11 +1,58 @@
-# Contrato Inventario ↔ Servicios — estado y decisiones pendientes
+# Contrato Inventario ↔ Servicios — decisiones e implementación
 
 **Responsable de Inventario:** Valeria · **Responsable de Servicios:** Zlatan
-**Estado:** borrador para acordar. Nada de lo marcado como *propuesta* o *por acordar* es una decisión definitiva.
-**Actualización 19/11/2026 (issue #53):** la sección 6 contiene la propuesta de Inventario para D1–D9, **pendiente de aprobación** del responsable de Servicios.
+**Estado (19/11/2026, issue #53):** reglas de reserva, consumo, liberación y transacción **aprobadas** por el responsable de Servicios e **implementadas** en `InventarioServiciosJdbc` (sección 0). Lotes (D4) y devoluciones (D8) siguen pendientes.
 **Relacionado:** issues #16 y #32, PR #44, [`docs/servicios/integracion-inventario.md`](../servicios/integracion-inventario.md) y [`docs/servicios/contratos-pendientes.md`](../servicios/contratos-pendientes.md).
 
-Este documento describe qué ofrece hoy el módulo de Inventario al módulo de Servicios, qué falta y qué deben acordar ambos responsables antes de implementar reservas, consumo y liberación de repuestos.
+Este documento describe qué ofrece el módulo de Inventario al módulo de Servicios, las reglas acordadas y lo que sigue pendiente.
+
+## 0. Decisiones aprobadas e implementación (19/11/2026)
+
+### Reglas aprobadas por Servicios (Zlatan, issue #53)
+
+1. La reserva reduce el stock disponible para que otros servicios no usen unidades comprometidas, sin descontar dos veces el stock físico. → **D2 = opción A.**
+2. Inventario gestiona los movimientos y valida las cantidades; Servicios inicia y coordina la transacción de negocio. → **D6.**
+3. Las operaciones relacionadas comparten la misma conexión JDBC y son atómicas: si algo falla, `rollback` completo. → **D6, D7.**
+4. Consumir no vuelve a descontar lo reservado; liberar devuelve solo lo reservado que aún no se consumió.
+
+**Adoptado de la propuesta de Inventario (sección 6), compatible con las reglas anteriores:** D1 `cantidad_reservada` = saldo pendiente; D3 sin reservas parciales; D5 el precio se fija al crear la línea; D8 cancelar libera todo el saldo. **Por confirmar explícitamente con Servicios:** D1, porque cambia el significado que leerán otros módulos de `cantidad_reservada`.
+
+Compatibilidad verificada con el esquema de `develop` (`database/bloques/inventario.sql` y `servicios.sql`): no requiere columnas nuevas ni cambios de SQL. El esquema consolidado (`database/esquema/esquema.sql`) aún no está publicado; cuando lo esté, debe revisarse que conserve `servicios_repuestos` y sus claves.
+
+### Implementación
+
+| Pieza | Responsabilidad |
+|---|---|
+| `servicios.inventario.InventarioServiciosJdbc` | Implementa `InventarioServiciosPort` (**sin cambiar la interfaz**). Recibe en el constructor la `Connection` de la transacción de Servicios; no confirma, no deshace y no la cierra. Exige `autoCommit` desactivado. Añade `liberarTodo(servicioId)` para cancelaciones y `ejecutarEnTransaccion(...)`, que confirma o hace `rollback` completo. |
+| `dao.ReservaRepuestoDAO` | SQL de `servicios_repuestos` con `UPDATE` condicionados (`cantidad_reservada >= ?`). |
+| `dao.RepuestoDAO` | `restarStock`, `sumarStock` y `bloquearParaActualizar` sobre una transacción abierta; las entradas y salidas existentes los reutilizan. |
+
+| Operación | `repuestos.cantidad_stock` | `servicios_repuestos` |
+|---|---|---|
+| `reservar(s, r, n)` | `− n` si hay stock (`UPDATE … WHERE cantidad_stock >= n`); si no, `StockInsuficienteException` | crea la línea `(s, r, n, 0, precio_venta)` o `cantidad_reservada + n` (conserva el precio) |
+| `consumir(s, r, n)` | sin cambios | `cantidad_reservada − n`, `cantidad_usada + n`, solo si `cantidad_reservada >= n` |
+| `liberar(s, r, n)` | `+ n` | `cantidad_reservada − n`, solo si `cantidad_reservada >= n`; `cantidad_usada` no cambia |
+| `liberarTodo(s)` (cancelación) | `+` saldo pendiente de cada repuesto | `cantidad_reservada = 0`; `cantidad_usada` no cambia |
+
+Bloqueos en orden fijo (primero `repuestos`, luego `servicios_repuestos`) para evitar interbloqueos. Errores: `StockInsuficienteException`, `RepuestoNoEncontradoException`, `NoSuchElementException` (sin reserva), `IllegalStateException` (supera el saldo pendiente, conexión en `autoCommit` o error JDBC con la `SQLException` como causa, porque el puerto no declara excepciones comprobadas). Ante **cualquier** excepción, quien coordina debe hacer `rollback`.
+
+### Uso desde Servicios
+
+```java
+InventarioServiciosJdbc.ejecutarEnTransaccion(ConexionFactory::obtenerConexion, (conexion, inventario) -> {
+    // ... cambios propios de Servicios con la MISMA conexion ...
+    inventario.reservar(new ReservaRepuesto(servicioId, repuestoId, cantidad));
+    return null;
+}); // commit si todo sale bien; rollback completo ante cualquier excepción
+```
+
+Si Servicios ya tiene su propia transacción abierta: `new InventarioServiciosJdbc(conexion).reservar(...)` y Servicios confirma o deshace.
+
+### Pendiente
+
+- Conectar el adaptador a `ServicioService`/`ServicioControlador` (módulo de Servicios; no se modificó desde Inventario).
+- D4 (movimientos por lote) y D8 (devolución de unidades ya consumidas).
+- Confirmar D1 y revisar el esquema consolidado cuando se publique.
 
 ## 1. Datos involucrados
 
@@ -50,21 +97,22 @@ Errores que puede recibir quien llame: `IllegalArgumentException` (datos inváli
 Limitaciones actuales:
 
 - `registrarEntrada` y `registrarSalida` modifican solo `repuestos.cantidad_stock`; **no** modifican `lotes.cantidad_disponible` (ver D4).
-- Cada operación abre su propia conexión. No pueden participar todavía en una transacción junto con cambios en `servicios_repuestos` (ver D6).
+- `registrarEntrada`/`registrarSalida` abren su propia transacción. Para operar dentro de la transacción de Servicios se usan `restarStock`/`sumarStock` o, mejor, `InventarioServiciosJdbc` (sección 0).
 
 Atomicidad verificada (issue #53): `registrarEntrada` y `registrarSalida` hacen `rollback` ante cualquier error JDBC (incluido un fallo al confirmar), restauran el *autocommit* y no dejan cambios en la base; 20 salidas simultáneas sobre 10 unidades aceptan exactamente 10 y el stock nunca queda negativo. Pruebas: `RepuestoDAOTransaccionTest` (sin MySQL) y `RepuestoDAOTransaccionIntegracionTest` (MySQL en base desechable).
 
-## 4. Operaciones pendientes
+## 4. Estado de las operaciones
 
 | Operación | Estado | Bloqueada por |
 |---|---|---|
-| Implementación de `InventarioServiciosPort.reservar` | No implementada | D1, D2, D3, D5, D6, D7 |
-| Implementación de `InventarioServiciosPort.consumir` | No implementada | D1, D2, D4, D6, D7 |
-| Implementación de `InventarioServiciosPort.liberar` | No implementada | D1, D2, D6, D8 |
-| Consulta de disponibilidad que considere reservas | No implementada | D2 |
+| Implementación de `InventarioServiciosPort.reservar` | **Implementada** (`InventarioServiciosJdbc`) | — |
+| Implementación de `InventarioServiciosPort.consumir` | **Implementada** | — |
+| Implementación de `InventarioServiciosPort.liberar` | **Implementada** (+ `liberarTodo` para cancelaciones) | — |
+| Consulta de disponibilidad que considere reservas | **Resuelta por D2 = A:** `cantidad_stock` ya excluye lo reservado, así que `hayStockSuficiente` refleja lo disponible | — |
 | Movimiento de unidades por lote | No implementado | D4 |
+| Devolución de unidades ya consumidas | No implementada | D8 |
 
-## 5. Decisiones por acordar
+## 5. Decisiones planteadas (contexto; lo aprobado está en la sección 0)
 
 Cada punto incluye opciones para discutir; **ninguna está elegida**.
 
@@ -93,7 +141,7 @@ Cada punto incluye opciones para discutir; **ninguna está elegida**.
 
 **D9. Ubicación del código.** En qué paquete vive la implementación del puerto. Depende de la convención de nombres pendiente (`servicios` o `servicio`; ver PR #47 e issue #46).
 
-## 6. Propuesta de Inventario para D1–D9 (pendiente de aprobación)
+## 6. Propuesta de Inventario para D1–D9 (histórico; lo aprobado está en la sección 0)
 
 > Propuesta del responsable de Inventario para discutir con Servicios. **No es una decisión aprobada** y no se implementará hasta que ambos responsables la acepten, la modifiquen o la reemplacen. Cada punto indica la evidencia en la que se apoya.
 
@@ -128,10 +176,9 @@ Cualquier fallo en cualquiera de los dos lados → `rollback` de la transacción
 3. Para D6: ¿se agrega la `Connection` como parámetro de `InventarioServiciosPort` o el adaptador la recibe al construirse?
 4. ¿Se acepta dejar lotes (D4) y devoluciones (D8) para una fase posterior?
 
-## 7. Próximos pasos propuestos
+## 7. Próximos pasos
 
-1. Ambos responsables acuerdan D1 a D9 y registran la decisión en este documento y en el issue #16.
-2. Inventario implementa el puerto según lo acordado, con pruebas unitarias y pruebas de integración en bases desechables.
-3. Servicios conecta el puerto a sus casos de uso y verifica el flujo completo.
-
-Hasta entonces, Inventario **no** implementa reservas, consumo, liberación, transacciones compartidas ni movimientos por lote.
+1. Servicios conecta `InventarioServiciosJdbc` a sus casos de uso (registrar repuestos de una orden, consumir al usarlos, liberar o cancelar), dentro de su transacción.
+2. Confirmar D1 (saldo pendiente) y registrar la confirmación en el issue #53.
+3. Acordar D4 (lotes) y D8 (devoluciones) en una fase posterior.
+4. Revisar la compatibilidad con `database/esquema/esquema.sql` cuando se publique.
