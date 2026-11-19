@@ -14,6 +14,16 @@ import java.util.Optional;
 
 public class ClienteDAO {
 
+    private final FuenteConexion fuente;
+
+    public ClienteDAO() {
+        this(ConexionFactory::obtenerConexion);
+    }
+
+    ClienteDAO(FuenteConexion fuente) {
+        this.fuente = java.util.Objects.requireNonNull(fuente);
+    }
+
     private static final String INSERT =
             "INSERT INTO clientes (nombre, documento_identidad, telefono, email) VALUES (?, ?, ?, ?)";
     private static final String SELECT_BY_ID =
@@ -26,7 +36,7 @@ public class ClienteDAO {
             "UPDATE clientes SET telefono = ?, email = ? WHERE id = ?";
 
     public Cliente registrar(Cliente c) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, c.getNombre());
             ps.setString(2, c.getDocumentoIdentidad());
@@ -41,7 +51,7 @@ public class ClienteDAO {
     }
 
     public Optional<Cliente> buscarPorId(int id) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_BY_ID)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -51,7 +61,7 @@ public class ClienteDAO {
     }
 
     public Optional<Cliente> buscarPorDocumento(String documento) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_BY_DOC)) {
             ps.setString(1, documento);
             try (ResultSet rs = ps.executeQuery()) {
@@ -62,7 +72,7 @@ public class ClienteDAO {
 
     public List<Cliente> listar() throws SQLException {
         List<Cliente> lista = new ArrayList<>();
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_ALL);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) lista.add(mapear(rs));
@@ -71,7 +81,7 @@ public class ClienteDAO {
     }
 
     public boolean actualizarContacto(int id, String telefono, String email) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(UPDATE_CONTACTO)) {
             ps.setString(1, telefono);
             ps.setString(2, email);

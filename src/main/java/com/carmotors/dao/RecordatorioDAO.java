@@ -17,6 +17,16 @@ import java.util.Optional;
 
 public class RecordatorioDAO {
 
+    private final FuenteConexion fuente;
+
+    public RecordatorioDAO() {
+        this(ConexionFactory::obtenerConexion);
+    }
+
+    RecordatorioDAO(FuenteConexion fuente) {
+        this.fuente = java.util.Objects.requireNonNull(fuente);
+    }
+
     private static final String INSERT =
             "INSERT INTO recordatorios_mantenimiento "
                     + "(vehiculo_id, servicio_origen_id, fecha_proximo_mantenimiento, descripcion, notificado) "
@@ -47,7 +57,7 @@ public class RecordatorioDAO {
                     + "ORDER BY fecha_proximo_mantenimiento";
 
     public Recordatorio crear(Recordatorio r) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, r.getVehiculoId());
             if (r.getServicioOrigenId() == null) {
@@ -67,7 +77,7 @@ public class RecordatorioDAO {
     }
 
     public Optional<Recordatorio> buscarPorId(int id) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_BY_ID)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
@@ -78,7 +88,7 @@ public class RecordatorioDAO {
 
     public List<Recordatorio> listarPendientes() throws SQLException {
         List<Recordatorio> lista = new ArrayList<>();
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_PENDIENTES);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) lista.add(mapear(rs));
@@ -88,7 +98,7 @@ public class RecordatorioDAO {
 
     public List<Recordatorio> listarPorVehiculo(int vehiculoId) throws SQLException {
         List<Recordatorio> lista = new ArrayList<>();
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_BY_VEHICULO)) {
             ps.setInt(1, vehiculoId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -99,7 +109,7 @@ public class RecordatorioDAO {
     }
 
     public boolean marcarNotificado(int id) throws SQLException {
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(UPDATE_NOTIFICADO)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
@@ -111,7 +121,7 @@ public class RecordatorioDAO {
     /** Sin notificar y con fecha anterior a 'hoy'. */
     public List<Recordatorio> listarVencidos(LocalDate hoy) throws SQLException {
         List<Recordatorio> lista = new ArrayList<>();
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_VENCIDOS)) {
             ps.setDate(1, Date.valueOf(hoy));
             try (ResultSet rs = ps.executeQuery()) {
@@ -124,7 +134,7 @@ public class RecordatorioDAO {
     /** Sin notificar y con fecha entre 'desde' y 'hasta' (ambas incluidas). */
     public List<Recordatorio> listarProximos(LocalDate desde, LocalDate hasta) throws SQLException {
         List<Recordatorio> lista = new ArrayList<>();
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_PROXIMOS)) {
             ps.setDate(1, Date.valueOf(desde));
             ps.setDate(2, Date.valueOf(hasta));
@@ -139,7 +149,7 @@ public class RecordatorioDAO {
     public List<Recordatorio> listarAlertasPorVehiculo(int vehiculoId, LocalDate limite)
             throws SQLException {
         List<Recordatorio> lista = new ArrayList<>();
-        try (Connection con = ConexionFactory.obtenerConexion();
+        try (Connection con = fuente.obtener();
              PreparedStatement ps = con.prepareStatement(SELECT_ALERTAS_VEHICULO)) {
             ps.setInt(1, vehiculoId);
             ps.setDate(2, Date.valueOf(limite));
