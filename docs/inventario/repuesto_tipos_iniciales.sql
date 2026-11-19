@@ -8,6 +8,12 @@
 -- Se puede ejecutar varias veces: un nombre que ya existe no se duplica ni falla
 -- (uq_repuesto_tipos_nombre + ON DUPLICATE KEY UPDATE sin cambios).
 -- La lista es una propuesta inicial; el equipo puede agregar o cambiar nombres.
+--
+-- SET NAMES utf8mb4: el archivo está en UTF-8. Sin esto, un cliente mysql cuya
+-- codificación por defecto es latin1 guarda "Eléctricos" doblemente codificado y,
+-- al repetir el script con otro cliente, crea nombres duplicados.
+SET NAMES utf8mb4;
+
 INSERT INTO repuesto_tipos (nombre) VALUES
     ('Filtros'),
     ('Frenos'),
