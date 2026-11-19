@@ -206,3 +206,57 @@ Durante el cierre, #70 avanzó a `9ceb167`, que ya incluye `d248951` de #62. Se 
 Las tres regresiones de Facturación y los ocho casos JDBC de `FlujosJdbcAceptacionTest` volvieron a pasar. Los dos fallos de la suite ampliada siguen siendo EOF en Recordatorios. El comando de ambas ejecuciones fue `mvn clean verify` con la configuración de MySQL anterior.
 
 La sonda desde `Main` volvió a comprobar las ocho rutas en la copia ampliada. **Inventario (4) y Proveedores (5) pasan** al entrar, volver con 0 y salir con 0. Vehículos (2), Servicios (3) y Técnicos (3 → 8) también pasan. Clientes (1), Recordatorios (6) y Facturación (7) siguen **pendientes de integración** y muestran el aviso. La corrección de EOF corresponde a Mary. La incorporación de las tres rutas y su validación final corresponden a Zlatan y a los responsables de cada vista.
+
+## Auditoría del candidato final `ba0e3c4`
+
+**Veredicto: NO APTO PARA INTEGRAR.** Se reprodujo una discrepancia monetaria en la consulta de una factura ya emitida, provocada desde el menú de Servicios. El HEAD de #70 coincidía con `ba0e3c49fa9e4e3508ac8c1cf0647fbe836e70fc` al iniciar la auditoría.
+
+### Evidencia
+
+| Ejecución | Ejecutadas | Aprobadas | Fallidas | Errores | Omitidas | JDBC real |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| CI del SHA exacto | 381 | 381 | 0 | 0 | 0 | 77 |
+| `mvn clean verify` local del SHA exacto | 381 | 381 | 0 | 0 | 0 | 77 |
+| Regresión adicional de QA aplicada al candidato | 1 | 0 | 1 | 0 | 0 | 1 |
+
+[Java CI del #70](https://github.com/zlatanvillamizar/proyecto-java-grupo03/actions/runs/44629773644). Ejecución local con Java 17.0.7, Maven 3.6.3 y MySQL 8.0.46 en instancia aislada. Los totales se comprobaron con los XML de Surefire. Los 77 casos JDBC corresponden a las 16 clases habilitadas por la URL del servidor temporal.
+
+Desde `Main` se abrieron y cerraron las ocho rutas con el mismo flujo de entrada. En una primera JVM se registraron cliente, vehículo, proveedor, repuesto, orden, técnico, recordatorio y factura. En otra JVM se recuperaron los registros. Se buscó el cliente por ID y documento, se listó y se actualizó su contacto. Se crearon la reserva y el consumo desde Servicios y se marcó el recordatorio como notificado. Inventario y Proveedores tuvieron sus rutas de consola activas. La relación Cliente → Vehículo → Servicio → Factura se verificó también mediante una consulta directa. El esquema consolidado creó 16 tablas, 16 PK y 17 FK. Se encontró una sola definición de `ClienteDAO`, con los constructores por defecto e inyectable.
+
+Se probaron opción principal inexistente, entrada no numérica, regreso con 0 y EOF durante operaciones. En Facturación, con `7\n2\n`, el proceso terminó en menos de 12 segundos, mostró una sola vez el submenú de Facturación y devolvió el control a `Main`. Las regresiones de la suite verificaron rollback de Facturación, concurrencia de facturas, exclusión del consumo cero, notificación concurrente única y persistida, liberación de stock, rollback de Servicios/Inventario y cierre de recursos. La tasa provisional sigue en 0 % por defecto y el servicio permite inyectar una tasa. La auditoría cargó un esquema limpio y desechable. Queda fuera de esta evidencia una migración de datos de una base existente.
+
+### Bloqueante · El detalle histórico de factura cambia tras facturar
+
+1. Desde Servicios, crea una orden con mano de obra de 20,15, reserva 5 unidades de un repuesto que cuesta 10,25 y consume 2.
+2. Cambia la orden a `Completado`. Desde Facturación, emite la factura. El detalle muestra 2 × 10,25 = 20,50 y el total es 40,65.
+3. Vuelve a Servicios y consume 1 unidad más de la misma reserva, usando la opción 10.
+4. Consulta la factura por su ID. El detalle muestra 3 × 10,25 = 30,75, pero el subtotal de repuestos sigue en 20,50 y el total en 40,65. MySQL confirma que la cantidad consumida pasó a 3 y los importes persistidos de la factura siguen intactos.
+
+Se espera que la consulta conserve el detalle de la factura emitida y que este coincida con sus importes persistidos. `ServicioService.moverRepuesto` acepta la operación porque `validarOrdenOperativa` solo rechaza órdenes canceladas. `FacturaService.buscarPorId` recupera importes persistidos y enriquece el resultado con cantidades actuales de `FacturaDAO.cargarDetalles`. El defecto cruza Servicios y Facturación. Mary y Zlatan deben acordar si se preserva el detalle en la emisión o se impiden, de forma transaccional, los cambios que alteren el consumo facturado.
+
+La regresión `FacturaHistoricaAceptacionTest.elDetalleConsultadoSigueCoincidiendoConLaFacturaEmitida` reproduce el problema desde dos procesos reales de `Main`. Para repetirla, aplica esa prueba de #69 sobre el candidato con el esquema y las rutas integradas, configura la URL de MySQL desechable y ejecuta `mvn -Dtest=FacturaHistoricaAceptacionTest test`.
+
+## Reauditoría independiente del candidato `3155e48`
+
+**Veredicto: APTO PARA INTEGRAR el SHA `3155e486e067c296ffcf6732ee6bfdb143df5833`.** En la auditoría anterior, la factura mostraba detalles de consumo actuales con importes históricos. La regresión original pasó sobre el SHA corregido. La referencia local y el HEAD de #70 coincidían al verificar el candidato.
+
+| Ejecución | Ejecutadas | Aprobadas | Fallidas | Errores | Omitidas | JDBC real |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `mvn clean verify` local, Java 17.0.7 y MySQL 8.0.46 aislado | 383 | 383 | 0 | 0 | 0 | 79 |
+| `FacturaHistoricaAceptacionTest` dentro de esa suite | 1 | 1 | 0 | 0 | 0 | 1 |
+
+Los totales se contaron en los XML de Surefire y se cotejaron con las clases condicionadas a la URL MySQL de prueba. [Java CI del candidato](https://github.com/zlatanvillamizar/proyecto-java-grupo03/actions/runs/44635158709), aprobado sobre el mismo SHA.
+
+| Comprobación | Resultado independiente |
+| --- | --- |
+| Emisión, intento de tercer consumo y consulta | Desde `Main`, emití dos repuestos a 10,25. El consumo adicional fue rechazado y MySQL conservó consumo 2 y stock 5. Cabecera y detalle siguieron en 20,50 de repuestos, 20,15 de mano de obra, 0,00 de impuestos y 40,65 de total. |
+| Liberar reserva y preservar historia | Liberar tres unidades dejó stock 8, reserva 0 y consumo 2. En el esquema desechable cambié luego el nombre, cantidad y precio de los datos de origen por SQL. Otra JVM siguió mostrando el nombre original, 2 × 10,25 y los importes de emisión. |
+| Emisión concurrente | Dos procesos de `Main` intentaron emitir para la misma orden. Hubo una emisión y un rechazo, con una cabecera y una línea en MySQL. También pasaron las pruebas JDBC de concurrencia y la restricción de unicidad por servicio. |
+| Rollback y recursos | En el esquema temporal, un trigger `BEFORE INSERT` de `factura_detalles` lanzó SQLState `45000` después de que el DAO enviara el INSERT de cabecera. No quedó cabecera ni detalle parcial. Quité el trigger y el reintento emitió por 30,40. La suite cubrió fallo de commit, restauración de autocommit y cierre de recursos. Al terminar las sesiones de consola no quedaron conexiones activas sobre el esquema. |
+| Esquema nuevo | El consolidado instaló 17 tablas, 17 PK y 18 FK. Incluyó `factura_detalles`, la FK a su cabecera y la unicidad por servicio. |
+| Migración desde el esquema anterior | Cargué una copia de `ba0e3c4` con una factura de subtotal 20,50 y total 40,65 y con tres unidades en consumo vivo. Ejecuté `001_detalle_historico_facturas.sql`. La factura conservó ambos importes y `detalle_historico=0`, con cero filas de desglose. `Main` mostró «Detalle histórico no disponible para esta factura» y evitó mostrar el consumo vivo. En esa misma base, una emisión nueva guardó su línea histórica y mostró total 30,40. |
+| Navegación y EOF | Las ocho rutas abrieron, procesaron el guion y regresaron usando la misma entrada. Se verificaron opciones inválidas, retorno con 0 y EOF. Con `7\n2\n`, Facturación mostró su submenú una vez y devolvió el control sin excepción. Recordatorios retornó limpiamente con EOF durante el listado por vehículo. |
+
+`ServicioService.moverRepuesto` toma el bloqueo de la orden antes de consultar si existe factura, y `FacturaDAO.verificarOrigenBajoBloqueo` usa el mismo bloqueo para revalidar el consumo antes de emitir. `insertarEnTransaccion` confirma juntos cabecera y detalle. `FacturaService.buscarPorId` consulta el desglose persistido mediante `FacturaDAO`, sin reconstruirlo con consumo posterior. Por eso la protección verificada aplica también fuera del menú. La suite cubrió una tasa inyectada del 10 %. La consola conserva el 0 % provisional.
+
+Sin nuevos defectos reproducidos en este alcance. La migración se ensayó en una copia aislada, no en una instalación con datos reales ni durante tráfico concurrente de despliegue. Se aplicó una sola vez sobre el esquema anterior y los esquemas de prueba se eliminaron.

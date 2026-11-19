@@ -106,7 +106,7 @@ Las nuevas facturas guardan el detalle, precios y datos de presentación en la m
 | Recordatorios y Alertas | Activa en la opción 6. Crea y consulta recordatorios, muestra alertas y permite notificar. |
 | Facturación | Activa en la opción 7. Emite una factura por servicio completado, la consulta y lista facturas. |
 
-Facturación no cobra repuestos sin consumo. La consola mantiene la tasa de desarrollo de 0% de #68. La configuración fiscal de entrega queda pendiente de aprobación del equipo.
+Facturación cobra únicamente los repuestos consumidos. La consola usa una tasa de impuestos del 0 % para la demostración académica.
 
 `Main` abre `vista.MenuPrincipal`, que comparte un único `Scanner` con las vistas. Los controladores delegan en las clases de servicio y los DAO ejecutan SQL mediante JDBC. Servicios coordina la transacción y construye el adaptador de Inventario con esa misma conexión. La reserva descuenta unidades disponibles, el consumo las mueve al saldo usado y la liberación devuelve el pendiente. Al cancelar, Servicios bloquea la orden y confirma a la vez el estado y la devolución. La primera reserva fija el precio de la línea.
 

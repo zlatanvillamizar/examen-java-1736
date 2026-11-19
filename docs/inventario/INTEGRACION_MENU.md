@@ -1,7 +1,6 @@
 # Conexión de Inventario y Proveedores al menú principal (para Zlatan)
 
-
-Las opciones 4 y 5 ya están conectadas en el PR #70 desde el candidato 9ceb167. Los diffs siguientes documentan la propuesta original sobre fae432b.
+Las opciones 4 y 5 ya están conectadas en el PR #70 desde el candidato `9ceb167`. Los diffs siguientes documentan la propuesta original sobre `fae432b`.
 
 Instrucciones para conectar las vistas reales de Inventario y Proveedores en `MenuPrincipal` de la rama `integracion/carmotors-final` (PR #70). Las firmas se tomaron del código publicado: PR #62 en `d248951` y PR #70 en `fae432b`.
 
