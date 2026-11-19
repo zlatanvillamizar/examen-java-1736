@@ -131,6 +131,19 @@ public class InventarioService {
         return proveedores.buscarPorId(id);
     }
 
+    /**
+     * Busca un proveedor por su nombre exacto (único en {@code proveedores}),
+     * ignorando espacios al inicio y al final.
+     *
+     * @throws IllegalArgumentException si el nombre está vacío
+     */
+    public Optional<Proveedor> buscarProveedorPorNombre(String nombre) throws SQLException {
+        if (nombre == null || nombre.isBlank()) {
+            throw new IllegalArgumentException("El nombre del proveedor es obligatorio");
+        }
+        return proveedores.buscarPorNombre(nombre);
+    }
+
     public List<Proveedor> listarProveedores() throws SQLException {
         return List.copyOf(proveedores.listar());
     }

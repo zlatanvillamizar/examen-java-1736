@@ -138,6 +138,16 @@ class InventarioServiceTest {
     }
 
     @Test
+    void buscaUnProveedorPorNombreYValidaElNombre() throws Exception {
+        Proveedor guardado = inventario.registrarProveedor("AutoPartes SAS", "Laura", null, null);
+
+        assertEquals(Optional.of(guardado), inventario.buscarProveedorPorNombre("  AutoPartes SAS "));
+        assertTrue(inventario.buscarProveedorPorNombre("Otro").isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> inventario.buscarProveedorPorNombre(" "));
+        assertThrows(IllegalArgumentException.class, () -> inventario.buscarProveedorPorNombre(null));
+    }
+
+    @Test
     void noPermiteDosProveedoresConElMismoNombre() throws Exception {
         inventario.registrarProveedor("AutoPartes SAS", null, null, null);
 
