@@ -1,5 +1,6 @@
 package com.carmotors.vista;
 
+import com.carmotors.controlador.ClienteControlador;
 import com.carmotors.controlador.InventarioControlador;
 import com.carmotors.controlador.ServicioControlador;
 import com.carmotors.controlador.VehiculoControlador;
@@ -12,13 +13,14 @@ public class MenuPrincipal {
     public void mostrar() {
         Scanner entrada = new Scanner(System.in);
         PrintStream salida = System.out;
+        VistaClientes clientes = new VistaClientes(entrada, salida, new ClienteControlador());
         VistaServicios servicios = new VistaServicios(entrada, salida, new ServicioControlador());
         VistaVehiculos vehiculos = new VistaVehiculos(entrada, salida, new VehiculoControlador());
         InventarioControlador inventarioControlador = new InventarioControlador();
         VistaInventario inventario = new VistaInventario(entrada, salida, inventarioControlador);
         VistaProveedores proveedores = new VistaProveedores(entrada, salida, inventarioControlador);
         mostrar(entrada, salida, Map.of(
-                "2", vehiculos::mostrar, "3", servicios::mostrar,
+                "1", clientes::mostrar, "2", vehiculos::mostrar, "3", servicios::mostrar,
                 "4", inventario::mostrar, "5", proveedores::mostrar));
     }
 

@@ -97,7 +97,7 @@ El script consolidado crea clientes → vehículos → inventario → servicios 
 
 | Módulo | Estado de la consola en esta rama |
 | --- | --- |
-| Clientes | Controlador y persistencia disponibles. Vista pendiente. |
+| Clientes | Activa en la opción 1. Registra clientes, muestra su ID, permite buscarlos por ID o documento, listarlos y actualizar su contacto. |
 | Vehículos | Registro y consultas con la vista de #67. |
 | Servicios y Técnicos | Órdenes, asignaciones y movimientos de repuestos. |
 | Inventario y Proveedores | Vistas activas en las opciones 4 y 5. Incluyen registro, consultas, movimientos de stock y actualización del contacto del proveedor. |

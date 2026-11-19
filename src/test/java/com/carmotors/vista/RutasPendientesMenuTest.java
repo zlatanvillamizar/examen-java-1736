@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RutasPendientesMenuTest {
     @ParameterizedTest
-    @CsvSource({"1, Clientes", "6, Recordatorios y Alertas", "7, Facturación"})
+    @CsvSource({"6, Recordatorios y Alertas", "7, Facturación"})
     void abreVistaConEntradaCompartidaYRegresaConCero(String opcion, String nombre) {
         String resultado = ejecutar(opcion, nombre, opcion + "\nx\n0\n0\n");
         int submenu = resultado.indexOf("Vista simulada: " + nombre);
@@ -25,7 +25,7 @@ class RutasPendientesMenuTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"1, Clientes", "6, Recordatorios y Alertas", "7, Facturación"})
+    @CsvSource({"6, Recordatorios y Alertas", "7, Facturación"})
     void terminaSiLaEntradaAcabaDentroDeLaVista(String opcion, String nombre) {
         String resultado = ejecutar(opcion, nombre, opcion + "\n");
         assertTrue(resultado.contains("Vista simulada: " + nombre), resultado);

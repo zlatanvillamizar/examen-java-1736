@@ -36,7 +36,7 @@ class MenuPrincipalTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"1", "6", "7"})
+    @ValueSource(strings = {"6", "7"})
     void informaQueLaVistaEstaPendienteYRegresaAlMenu(String opcion) {
         String salida = ejecutarMain(opcion + "\n0\n");
         assertTrue(salida.contains("La vista de este módulo está pendiente de integración."));
@@ -44,7 +44,7 @@ class MenuPrincipalTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"4, Inventario, 7", "5, Proveedores, 5"})
+    @CsvSource({"1, Clientes, 5", "4, Inventario, 7", "5, Proveedores, 5"})
     void abreVistaRealRechazaOpcionInvalidaYRegresa(String opcion, String titulo, int maximo) {
         String salida = ejecutarMain(opcion + "\nx\n0\n2\n0\n0\n");
         int vista = salida.indexOf("=== " + titulo + " ===");
@@ -56,7 +56,7 @@ class MenuPrincipalTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"4, Inventario", "5, Proveedores"})
+    @CsvSource({"1, Clientes", "4, Inventario", "5, Proveedores"})
     void terminaConEofEnLaVistaRealOEnUnRegistro(String opcion, String titulo) {
         assertTrue(ejecutarMain(opcion + "\n").contains("=== " + titulo + " ==="));
         String salida = ejecutarMain(opcion + "\n1\n");
