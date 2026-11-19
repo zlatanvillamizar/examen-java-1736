@@ -24,7 +24,7 @@ public class FacturaDAO {
         this(ConexionFactory::obtenerConexion);
     }
 
-    FacturaDAO(FuenteConexion fuente) {
+    public FacturaDAO(FuenteConexion fuente) {
         this.fuente = java.util.Objects.requireNonNull(fuente);
     }
 

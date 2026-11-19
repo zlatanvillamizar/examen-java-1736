@@ -9,11 +9,11 @@
 | 3 | Servicios y Técnicos | Activa. Gestiona órdenes, técnicos y repuestos. La opción 8 abre el submenú de Técnicos. |
 | 4 | Inventario y Repuestos | Activa. Registra y consulta repuestos, stock, entradas, salidas y alertas de stock mínimo. |
 | 5 | Proveedores | Activa. Registra, busca por ID o nombre, lista y actualiza el contacto. |
-| 6 | Recordatorios y Alertas | Ruta pendiente. La vista candidata está en #61. |
-| 7 | Facturación | Ruta pendiente. La vista candidata está en #68. |
+| 6 | Recordatorios y Alertas | Activa. Crea recordatorios, consulta alertas y marca notificaciones. |
+| 7 | Facturación | Activa. Emite, consulta y lista facturas de servicios completados. |
 | 0 | Salir | Termina Main. |
 
-Las opciones 6 y 7 muestran un aviso y conservan el menú principal. `RutasPendientesMenuTest` verifica selección, entrada compartida, opción inválida, retorno con `0` y EOF con acciones simuladas. `MenuPrincipalTest` comprueba el aviso para las rutas pendientes y abre las vistas reales de Clientes, Inventario y Proveedores desde `Main`, donde verifica entrada inválida, regreso con `0` y EOF tanto al abrir como durante el registro.
+Las siete rutas abren las vistas reales desde `Main`. `MenuPrincipalTest` y `VistasEofAceptacionTest` verifican entrada inválida, regreso con `0` y EOF. `FlujosJdbcAceptacionTest` incluye alta y notificación de recordatorios y emisión de factura desde las opciones 6 y 7 sobre el esquema consolidado.
 
 Para registrar repuestos, carga primero [los datos iniciales de tipos](inventario/repuesto_tipos_iniciales.sql) en la base de la aplicación y consulta los IDs de `repuesto_tipos`. `AceptacionInventarioProveedoresTest` instala el esquema consolidado en MySQL, prueba ese catálogo y verifica persistencia del proveedor y el repuesto tras entradas, salidas y un rechazo por stock insuficiente.
 
@@ -47,7 +47,7 @@ Estas son las firmas públicas de `ClienteControlador`. Todas declaran `throws S
 - [ ] Probar primero en una rama temporal. Revisar los deltas del menú, del contrato JDBC y de los esquemas de prueba para conservar sus resoluciones.
 - [x] **Valeria — opciones 4 y 5.** Las vistas de `d248951` comparten la entrada y el controlador. Pasaron la aceptación sobre el esquema consolidado y las regresiones de stock, consumo, cancelación, rollback y concurrencia.
 - [x] **Clientes — opción 1.** Vista real conectada y flujo Cliente → Vehículo comprobado desde `Main`.
-- [ ] **Mary — opción 6.** En `a820836` siguen pendientes EOF seguro y notificación atómica. Verificar consultas reales en MySQL, límites de fechas, FK de vehículo y servicio opcional, y que dos intentos concurrentes solo produzcan una transición.
-- [ ] **Mary — opción 7.** En `f1aaf4a` se observan el filtro de consumos cero y el manejo de EOF. Verificar ambos en una rama temporal y probar emisión con el estado facturable acordado y el impuesto configurado, rollback, consulta y una sola factura ante dos emisiones concurrentes.
-- [ ] Añadir pruebas de la vista real desde `Main` con entrada inválida, regreso y EOF. Cambiar la expectativa de aviso pendiente para la ruta que se habilita y conservar esa expectativa para las demás.
+- [x] **Mary — opción 6.** `3cd4e76` integrado. EOF seguro, consultas JDBC y una sola transición ante dos notificaciones concurrentes.
+- [x] **Mary — opción 7.** `2acc467` integrado. EOF, consumo cero, rollback y una sola factura por servicio ante emisiones concurrentes.
+- [x] Verificar desde `Main` la apertura de las vistas reales, entrada inválida, regreso y EOF.
 - [ ] Ejecutar `mvn clean verify` con Java 17 y MySQL 8 aislado. Conservar la cobertura de las 207 pruebas de referencia, ejecutar las nuevas y revisar que ninguna prueba JDBC se omita. Adjuntar el SHA y los informes a #70 antes de decidir la integración definitiva.

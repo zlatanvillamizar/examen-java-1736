@@ -1,7 +1,9 @@
 package com.carmotors.vista;
 
 import com.carmotors.controlador.ClienteControlador;
+import com.carmotors.controlador.FacturaControlador;
 import com.carmotors.controlador.InventarioControlador;
+import com.carmotors.controlador.RecordatorioControlador;
 import com.carmotors.controlador.ServicioControlador;
 import com.carmotors.controlador.VehiculoControlador;
 
@@ -19,9 +21,12 @@ public class MenuPrincipal {
         InventarioControlador inventarioControlador = new InventarioControlador();
         VistaInventario inventario = new VistaInventario(entrada, salida, inventarioControlador);
         VistaProveedores proveedores = new VistaProveedores(entrada, salida, inventarioControlador);
+        RecordatorioVista recordatorios = new RecordatorioVista(new RecordatorioControlador(), entrada);
+        FacturaVista facturas = new FacturaVista(new FacturaControlador(), entrada);
         mostrar(entrada, salida, Map.of(
                 "1", clientes::mostrar, "2", vehiculos::mostrar, "3", servicios::mostrar,
-                "4", inventario::mostrar, "5", proveedores::mostrar));
+                "4", inventario::mostrar, "5", proveedores::mostrar,
+                "6", recordatorios::mostrarMenu, "7", facturas::mostrarMenu));
     }
 
     // Cada acción usa la entrada compartida y devuelve el control con 0 o al llegar a EOF.

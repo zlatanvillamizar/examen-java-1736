@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -36,11 +35,14 @@ class MenuPrincipalTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"6", "7"})
-    void informaQueLaVistaEstaPendienteYRegresaAlMenu(String opcion) {
-        String salida = ejecutarMain(opcion + "\n0\n");
-        assertTrue(salida.contains("La vista de este módulo está pendiente de integración."));
-        assertEquals(2L, salida.lines().filter(linea -> linea.contains("=== CarMotors SGT ===")).count());
+    @CsvSource({"6, RECORDATORIOS DE MANTENIMIENTO", "7, FACTURACIÓN"})
+    void abreRecordatoriosYFacturacionYRegresaAlMenu(String opcion, String titulo) {
+        String salida = ejecutarMain(opcion + "\nx\n99\n0\n2\n0\n0\n");
+        int vista = salida.indexOf("=== " + titulo + " ===");
+        assertTrue(vista >= 0 && salida.indexOf("=== Vehículos ===") > vista, salida);
+        assertTrue(salida.contains("Ingrese un número válido."), salida);
+        assertTrue(salida.contains("Opción no válida."), salida);
+        assertFalse(salida.contains("pendiente de integración"), salida);
     }
 
     @ParameterizedTest

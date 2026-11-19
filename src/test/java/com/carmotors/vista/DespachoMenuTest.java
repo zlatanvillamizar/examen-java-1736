@@ -12,7 +12,7 @@ import java.util.Scanner;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class RutasPendientesMenuTest {
+class DespachoMenuTest {
     @ParameterizedTest
     @CsvSource({"6, Recordatorios y Alertas", "7, Facturación"})
     void abreVistaConEntradaCompartidaYRegresaConCero(String opcion, String nombre) {

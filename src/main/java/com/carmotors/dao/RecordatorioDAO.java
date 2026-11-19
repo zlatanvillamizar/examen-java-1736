@@ -23,7 +23,7 @@ public class RecordatorioDAO {
         this(ConexionFactory::obtenerConexion);
     }
 
-    RecordatorioDAO(FuenteConexion fuente) {
+    public RecordatorioDAO(FuenteConexion fuente) {
         this.fuente = java.util.Objects.requireNonNull(fuente);
     }
 

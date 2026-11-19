@@ -47,7 +47,7 @@ CREATE USER 'carmotors_app'@'localhost' IDENTIFIED BY RANDOM PASSWORD;
 GRANT SELECT, INSERT, UPDATE, DELETE ON carmotors.* TO 'carmotors_app'@'localhost';
 ```
 
-Carga los catálogos de estados y tipos de mantenimiento antes de registrar órdenes. Servicios identifica la cancelación por los nombres `Cancelado` o `Cancelada`, sin distinguir mayúsculas. Facturación en el PR #68 espera `Completado`. Registrar un vehículo requiere un cliente existente. Una instalación vacía permite probar la conexión desde **2 → 4** (Vehículos → Listar vehículos).
+Carga los catálogos de estados y tipos de mantenimiento antes de registrar órdenes. Servicios identifica la cancelación por los nombres `Cancelado` o `Cancelada`, sin distinguir mayúsculas. Facturación requiere `Completado`. Registrar un vehículo requiere un cliente existente. Una instalación vacía permite probar la conexión desde **2 → 4** (Vehículos → Listar vehículos).
 
 Antes de registrar repuestos, puedes cargar el catálogo inicial de Valeria en la misma base seleccionada. El script añade seis nombres, se puede volver a ejecutar y conserva el DDL aprobado.
 
@@ -101,8 +101,10 @@ El script consolidado crea clientes → vehículos → inventario → servicios 
 | Vehículos | Registro y consultas con la vista de #67. |
 | Servicios y Técnicos | Órdenes, asignaciones y movimientos de repuestos. |
 | Inventario y Proveedores | Vistas activas en las opciones 4 y 5. Incluyen registro, consultas, movimientos de stock y actualización del contacto del proveedor. |
-| Recordatorios y Alertas | Vista candidata en #61, pendiente de validación JDBC e integración. |
-| Facturación | Vista y DAO en #68, pendientes de validar con JDBC e integrar al menú. |
+| Recordatorios y Alertas | Activa en la opción 6. Crea y consulta recordatorios, muestra alertas y permite notificar. |
+| Facturación | Activa en la opción 7. Emite una factura por servicio completado, la consulta y lista facturas. |
+
+Facturación no cobra repuestos sin consumo. La consola mantiene la tasa de desarrollo de 0% de #68. La configuración fiscal de entrega queda pendiente de aprobación del equipo.
 
 `Main` abre `vista.MenuPrincipal`, que comparte un único `Scanner` con las vistas. Los controladores delegan en las clases de servicio y los DAO ejecutan SQL mediante JDBC. Servicios coordina la transacción y construye el adaptador de Inventario con esa misma conexión. La reserva descuenta unidades disponibles, el consumo las mueve al saldo usado y la liberación devuelve el pendiente. Al cancelar, Servicios bloquea la orden y confirma a la vez el estado y la devolución. La primera reserva fija el precio de la línea.
 

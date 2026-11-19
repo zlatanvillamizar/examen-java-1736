@@ -36,11 +36,11 @@ public class FacturaVista {
             System.out.println("0. Volver");
             try {
                 opcion = leerEntero("Opción: ");
+                ejecutar(opcion);
             } catch (EntradaEofException e) {
                 System.out.println("\nEntrada finalizada (EOF). Volviendo...");
                 break;
             }
-            ejecutar(opcion);
         } while (opcion != 0);
     }
 
@@ -56,7 +56,7 @@ public class FacturaVista {
                 default -> System.out.println("Opción no válida.");
             }
         } catch (EntradaEofException e) {
-            System.out.println("\nOperación interrumpida por fin de entrada (EOF).");
+            throw e;
         } catch (IllegalArgumentException | IllegalStateException e) {
             System.out.println("Dato no válido: " + e.getMessage());
         } catch (Exception e) {
