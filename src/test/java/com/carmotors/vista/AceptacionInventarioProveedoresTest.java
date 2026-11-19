@@ -73,18 +73,32 @@ class AceptacionInventarioProveedoresTest {
 
     /** Ejecuta el script documentado de datos iniciales (sin comentarios, por sentencias). */
     private void inicializarTiposDeRepuesto() throws SQLException, IOException {
+        inicializarTiposDeRepuesto(null);
+    }
+
+    /**
+     * Ejecuta el script en una sola conexión, como el cliente {@code mysql}. Con
+     * {@code charsetCliente} se simula un cliente cuya codificación por defecto no es
+     * utf8mb4: el servidor interpreta con ella los bytes UTF-8 del archivo.
+     */
+    private void inicializarTiposDeRepuesto(String charsetCliente) throws SQLException, IOException {
         StringBuilder sinComentarios = new StringBuilder();
         for (String linea : Files.readAllLines(TIPOS_INICIALES, StandardCharsets.UTF_8)) {
             if (!linea.strip().startsWith("--")) {
                 sinComentarios.append(linea).append('\n');
             }
         }
-        for (String sentencia : sinComentarios.toString().split(";")) {
-            if (!sentencia.isBlank()) {
-                String mayusculas = sentencia.toUpperCase();
-                assertFalse(mayusculas.matches("(?s).*\\b(CREATE|ALTER|DROP|TRUNCATE|DELETE)\\b.*"),
-                        "El script de datos no debe modificar el esquema ni borrar datos");
-                esquema.ejecutar(sentencia);
+        try (Connection conexion = esquema.conectar(); Statement sentencias = conexion.createStatement()) {
+            if (charsetCliente != null) {
+                sentencias.execute("SET NAMES " + charsetCliente);
+            }
+            for (String sentencia : sinComentarios.toString().split(";")) {
+                if (!sentencia.isBlank()) {
+                    String mayusculas = sentencia.toUpperCase();
+                    assertFalse(mayusculas.matches("(?s).*\\b(CREATE|ALTER|DROP|TRUNCATE|DELETE)\\b.*"),
+                            "El script de datos no debe modificar el esquema ni borrar datos");
+                    sentencias.execute(sentencia);
+                }
             }
         }
     }
@@ -112,6 +126,13 @@ class AceptacionInventarioProveedoresTest {
         try (Connection c = esquema.conectar(); Statement s = c.createStatement(); ResultSet r = s.executeQuery(sql)) {
             assertTrue(r.next(), sql);
             return r.getInt(1);
+        }
+    }
+
+    private String texto(String sql) throws SQLException {
+        try (Connection c = esquema.conectar(); Statement s = c.createStatement(); ResultSet r = s.executeQuery(sql)) {
+            assertTrue(r.next(), sql);
+            return r.getString(1);
         }
     }
 
@@ -166,6 +187,21 @@ class AceptacionInventarioProveedoresTest {
         assertEquals(1, entero("SELECT COUNT(*) FROM repuesto_tipos WHERE nombre = 'Eléctricos'"),
                 "Los acentos se guardan bien en utf8mb4");
         assertEquals(antes, huellaDelEsquema(), "El script de datos no modifica tablas ni columnas");
+    }
+
+    @Test
+    void elScriptDeTiposGuardaBienLosAcentosAunqueElClienteUseOtraCodificacion() throws Exception {
+        // El cliente mysql de muchas instalaciones usa latin1 por defecto.
+        inicializarTiposDeRepuesto("latin1");
+        // Repetirlo con un cliente utf8mb4 no debe crear duplicados.
+        inicializarTiposDeRepuesto("utf8mb4");
+        inicializarTiposDeRepuesto();
+
+        assertEquals("456CC3A963747269636F73", texto("SELECT HEX(nombre) FROM repuesto_tipos WHERE id = 4"),
+                "'Eléctricos' debe guardarse en UTF-8, sin doble codificación");
+        assertEquals("Suspensión", texto("SELECT nombre FROM repuesto_tipos WHERE id = 5"));
+        assertEquals(TIPOS_PROPUESTOS, entero("SELECT COUNT(*) FROM repuesto_tipos"),
+                "Ejecutar el script con distintos clientes no duplica tipos");
     }
 
     @Test
