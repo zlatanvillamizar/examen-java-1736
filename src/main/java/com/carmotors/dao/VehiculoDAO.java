@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public class VehiculoDAO {
@@ -31,9 +32,19 @@ public class VehiculoDAO {
             "SELECT id, cliente_id, placa, marca, modelo, anio " +
                     "FROM vehiculos ORDER BY id";
 
+    private final FuenteConexion fuente;
+
+    public VehiculoDAO() {
+        this(ConexionFactory::obtenerConexion);
+    }
+
+    public VehiculoDAO(FuenteConexion fuente) {
+        this.fuente = Objects.requireNonNull(fuente);
+    }
+
     public Vehiculo registrar(Vehiculo vehiculo) throws SQLException {
 
-        try (Connection conexion = ConexionFactory.obtenerConexion();
+        try (Connection conexion = fuente.obtener();
              PreparedStatement ps = conexion.prepareStatement(
                      INSERT, Statement.RETURN_GENERATED_KEYS)) {
 
@@ -57,7 +68,7 @@ public class VehiculoDAO {
 
     public Optional<Vehiculo> buscarPorId(int id) throws SQLException {
 
-        try (Connection conexion = ConexionFactory.obtenerConexion();
+        try (Connection conexion = fuente.obtener();
              PreparedStatement ps = conexion.prepareStatement(SELECT_BY_ID)) {
 
             ps.setInt(1, id);
@@ -74,7 +85,7 @@ public class VehiculoDAO {
 
     public Optional<Vehiculo> buscarPorPlaca(String placa) throws SQLException {
 
-        try (Connection conexion = ConexionFactory.obtenerConexion();
+        try (Connection conexion = fuente.obtener();
              PreparedStatement ps = conexion.prepareStatement(SELECT_BY_PLACA)) {
 
             ps.setString(1, placa);
@@ -93,7 +104,7 @@ public class VehiculoDAO {
 
         List<Vehiculo> vehiculos = new ArrayList<>();
 
-        try (Connection conexion = ConexionFactory.obtenerConexion();
+        try (Connection conexion = fuente.obtener();
              PreparedStatement ps = conexion.prepareStatement(SELECT_ALL);
              ResultSet rs = ps.executeQuery()) {
 
