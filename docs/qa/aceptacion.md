@@ -1,6 +1,6 @@
 # Aceptación de CarMotors · 19 de noviembre de 2026
 
-La segunda fase automatizó la reproducción de cuatro fallos de fin de entrada y verificó los recorridos JDBC A, B, D y E. La aceptación integral sigue pendiente de los fallos reproducidos, las rutas de consola faltantes y el contrato SQL de Facturación.
+La segunda fase reprodujo cuatro fallos de fin de entrada y un fallo de Facturación con consumo cero. Verificó los recorridos JDBC A, B, D y E, además del caso principal de C con el esquema consolidado del #70. La aceptación integral sigue pendiente de los fallos y las rutas de consola sin conectar.
 
 La rama de QA parte de `develop` en `a2e62d9`. También se construyó una copia temporal aplicando los cambios de los PR [#61](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/61) (`a820836`), [#62](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/62) (`ce2416b`), [#67](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/67) (`0fa2744`) y [#68](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/68) (`394492d`). Los cambios se aplicaron sin solapamientos en el menú y no se incorporaron a ninguna rama de integración. En esa copia, solo el #67 añade una opción principal.
 
@@ -85,21 +85,40 @@ JDK 17.0.7, Maven y MySQL 8.0.46. La suite ejecutó `mvn clean verify` en cada c
 
 | Configuración | Detectadas | Aprobadas | Fallidas | Omitidas | JDBC real ejecutadas |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| QA sobre `develop`, sin MySQL | 163 | 130 | 0 | 33 | 0 |
-| QA sobre `develop`, con MySQL | 163 | 155 | 0 | 8 | 25 |
-| QA más #61 individual, con MySQL | 212 | 206 | 2 | 4 | 26 |
-| QA más #68 individual, con MySQL | 193 | 186 | 2 | 5 | 25 |
-| QA más #61, #62, #67 y #68 en la copia temporal, con MySQL | 299 | 295 | 4 | 0 | 55 |
+| QA sobre `develop`, sin MySQL | 166 | 130 | 0 | 36 | 0 |
+| QA sobre `develop`, con MySQL | 166 | 155 | 0 | 11 | 25 |
+| QA más #61 individual, con MySQL | 215 | 206 | 2 | 7 | 26 |
+| QA más #68 individual, con MySQL | 196 | 186 | 2 | 8 | 25 |
+| QA más #61, #62, #67 y #68 en la copia temporal, con MySQL | 302 | 295 | 4 | 3 | 55 |
+| QA más #70 individual, con MySQL | 170 | 161 | 0 | 9 | 30 |
+| QA más #70, #61 y #68, con MySQL | 249 | 244 | 5 | 0 | 33 |
 
-Las cuatro fallidas combinadas son dos casos EOF por vista, con `NoSuchElementException: No line found`. Las pruebas de esas vistas se omiten solo cuando su API aún no existe en la compilación. En el entorno combinado estuvieron activas las seis pruebas de vista y los cuatro casos JDBC nuevos. Los flujos JDBC cargan los bloques versionados en un esquema de nombre aleatorio y redirigen la fábrica fija solo durante la clase de pruebas aislada. Para repetirlos, usa las variables de la primera fase con una URL de servidor sin catálogo ni parámetros y ejecuta:
+Las cuatro fallidas en la primera combinación son dos casos EOF por vista, con `NoSuchElementException: No line found`. La quinta fallida en la combinación con #70 es el detalle de factura con consumo cero. Las omisiones indican MySQL sin configurar o API/esquema faltantes en la copia ejecutada; ambas causas están registradas por JUnit. Los flujos JDBC cargan los bloques versionados en un esquema de nombre aleatorio y redirigen la fábrica fija solo durante la clase de pruebas aislada. Para repetirlos, usa las variables de la primera fase con una URL de servidor sin catálogo ni parámetros y ejecuta:
 
 ```bash
 mvn -Dtest=FlujosJdbcAceptacionTest,NavegacionAceptacionTest,VistasEofAceptacionTest test
 ```
 
+### Verificación del menú y esquema del #70
+
+El último seguimiento remoto detectó [#70](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/70) en `6af0dca`. QA probó ese cambio por separado y con #61/#68. #70 trae partes de #62 y #67; al comprobar sus parches completos sobre #70 se confirmaron solapamientos en `MenuPrincipal`, `VistaVehiculos`, el adaptador de Inventario y la preparación JDBC de sus pruebas. La prueba histórica `MenuPrincipalTest` de #67 se ejecutó por separado sobre #70 y dio 1 aprobado y 1 fallido. El fallo usa el mensaje y la numeración de la versión previa.
+
+| Alcance | Esperado y obtenido | Estado | Evidencia | Responsable |
+| --- | --- | --- | --- | --- |
+| Menú de #70 | Vehículos abre con 2, Servicios/Técnicos con 3 y salida con 0. Los submenús devuelven el control también con EOF y tras un error recuperable. Las otras cinco opciones aparecen como pendientes. | **Aprobado para rutas activas. Pendientes las otras cinco** | `6af0dca`. `NavegacionMainTest`, `NavegacionAceptacionTest` y la regresión JDBC desde `Main`. Las nuevas pruebas de QA leen la opción anunciada de Servicios y admiten que `Main` deje abierto el lector. | Zlatan y responsables de cada vista pendiente. |
+| B/E en #70 | Flujo normal desde el menú de Servicios, con reserva, consumo y liberación. Se comprobaron stock 8, reserva 0 y consumo 2. El adaptador sigue pasando el rollback con recuperación y #70 verifica rollback desde Servicios. | **Aprobado** | `6af0dca`. `serviciosInvocaLaRutaNormalDeReservaConsumoYLiberacion`, `ServicioInventarioIntegracionTest`. | |
+| C con consumo positivo | Emitir desde el controlador sobre orden completada, total 30,00 (mano de obra 10 y dos unidades a 10), consultar y rechazar el duplicado en el controlador y en MySQL (1062). Todo pasó. | **Aprobado** | `6af0dca` + `394492d`. `emiteFacturaConsultaYPreservaUnaSolaFacturaPorServicio`. | |
+| C con una reserva liberada sin consumo | La factura debería incluir solo la mano de obra. La emisión lanza `IllegalArgumentException: La cantidad debe ser mayor que cero` en `FacturaDAO.cargarDetalles`. | **Fallido** | `6af0dca` + `394492d`. `facturaIgnoraUnaLineaLiberadaQueNoTuvoConsumo`. | Mary, filtrar las líneas sin consumo en el DAO. |
+
+Para repetir QA en un árbol que ya contiene #70, configura también la factoría de la aplicación con la URL que intercepta la utilidad aislada. Las credenciales y el destino reales de prueba siguen viniendo de las variables `CARMOTORS_TEST_DB_*`.
+
+```bash
+CARMOTORS_DB_URL=jdbc:mysql://localhost:3306/carmotors \
+CARMOTORS_DB_USER=qa CARMOTORS_DB_PASSWORD='' mvn clean verify
+```
+
 ### Orden recomendado para Zlatan
 
-1. Incorporar #67 y reevaluar el #69 sobre el nuevo `develop`. Conservar las rutas de Servicios/Técnicos y Vehículos y la salida con 0.
-2. Incorporar el adaptador del #62 tras validar B y E y conectar la operación de Servicios con la transacción compartida. Mantener el caso de rollback seguido de recuperación.
-3. Integrar las vistas de #61 y #68 al menú definitivo después de que sus regresiones de EOF pasen. En Facturación, validar antes el DDL y el rechazo de duplicados sobre MySQL.
-4. Al conectar Clientes, Inventario y Proveedores, añadir sus rutas al guion automatizado desde `Main` y repetir la suite completa con MySQL. Acordar la numeración y que cada vista devuelva el control sin cerrar el lector compartido.
+1. Reconciliar #67 y #62 con #70 antes de integrar, preservando el menú de #70, las correcciones de Vehículos y los esquemas de prueba por bloques y consolidado. Adaptar la prueba histórica de menú al contrato actualizado. Repetir B/E desde Servicios y la suite completa de ambos módulos.
+2. Incorporar las correcciones de EOF de #61/#68 y excluir los detalles sin consumo en #68. Ejecutar nuevamente las cinco regresiones y verificar el DDL consolidado con el DAO de Facturación.
+3. Conectar las rutas pendientes de Clientes, Inventario, Proveedores, Recordatorios y Facturación con el mismo lector. Extender el guion de `Main` para validar entrada inválida, regreso, EOF y recuperación JDBC de cada vista nueva.
