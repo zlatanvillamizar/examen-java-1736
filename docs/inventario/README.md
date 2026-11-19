@@ -157,53 +157,50 @@ int devueltas = InventarioServiciosJdbc.ejecutarEnTransaccion(ConexionFactory::o
 
 ## 6. Conexión al menú principal (para Zlatan)
 
-Las vistas son independientes y **no se modificó `MenuPrincipal`**, para no pisar el PR #67 de Crisbely (Vehículos). Después de fusionar el PR #67, este es el cambio exacto:
+Las vistas son independientes y **esta rama no modifica `MenuPrincipal` ni `Main`**. El menú definitivo llega con el PR #70 (`integracion/carmotors-final`), que ya muestra "4. Inventario y Repuestos" y "5. Proveedores" como rutas pendientes en un `Map`. Para conectarlas basta con este cambio:
 
 ```diff
 +import com.carmotors.controlador.InventarioControlador;
  import com.carmotors.controlador.ServicioControlador;
  import com.carmotors.controlador.VehiculoControlador;
 @@
-             VistaVehiculos vehiculos = new VistaVehiculos(
-                     entrada, System.out, new VehiculoControlador());
-
-+            InventarioControlador inventarioControlador = new InventarioControlador();
-+            VistaInventario inventario = new VistaInventario(
-+                    entrada, System.out, inventarioControlador);
-+            VistaProveedores proveedores = new VistaProveedores(
-+                    entrada, System.out, inventarioControlador);
-+
-@@
-                         2. Vehículos
-+                        3. Inventario
-+                        4. Proveedores
-                         0. Salir""");
-@@
-                     case "2" -> vehiculos.mostrar();
-+                    case "3" -> inventario.mostrar();
-+                    case "4" -> proveedores.mostrar();
-                     default -> System.out.println(
--                            "Opción inválida. Elija 1, 2 o 0.");
-+                            "Opción inválida. Elija un número entre 0 y 4.");
+         VistaVehiculos vehiculos = new VistaVehiculos(entrada, salida, new VehiculoControlador());
+-        mostrar(entrada, salida, Map.of("2", vehiculos::mostrar, "3", servicios::mostrar));
++        InventarioControlador inventarioControlador = new InventarioControlador();
++        VistaInventario inventario = new VistaInventario(entrada, salida, inventarioControlador);
++        VistaProveedores proveedores = new VistaProveedores(entrada, salida, inventarioControlador);
++        mostrar(entrada, salida, Map.of("2", vehiculos::mostrar, "3", servicios::mostrar,
++                "4", inventario::mostrar, "5", proveedores::mostrar));
 ```
 
-En `MenuPrincipalTest` (PR #67) hay que actualizar el texto esperado `"Opción inválida. Elija 1, 2 o 0."` y conviene agregar una prueba de navegación, por ejemplo:
+En `MenuPrincipalTest` (PR #70), las opciones 4 y 5 salen de la prueba de rutas pendientes, `@ValueSource(strings = {"1", "6", "7"})`, y conviene agregar:
 
 ```java
 @Test
-void navegaPorInventarioYProveedoresSinBaseDeDatosYVuelveAlMenu() {
-    String salida = ejecutarMain("3\n2\nx\n0\n4\n2\n0\n0\n0\n");
+void navegaPorInventarioYProveedoresDesdeMainYRegresaAlMenu() {
+    String salida = ejecutarMain("4\n2\nx\n0\n5\n2\n0\n0\n0\n");
     assertTrue(salida.contains("=== Inventario ==="), salida);
     assertTrue(salida.contains("ID del repuesto debe ser un número entero."));
     assertTrue(salida.contains("=== Proveedores ==="));
     assertTrue(salida.contains("ID del proveedor debe ser positivo."));
+    assertFalse(salida.contains("pendiente de integración"));
     assertEquals(3L, salida.lines().filter(linea -> linea.contains("=== CarMotors SGT ===")).count());
 }
 ```
 
-**Verificado el 19/11/2026** en una copia aparte que se descartó: `develop` + PR #67 + esta rama se fusionan sin conflictos. Con el cambio anterior, `mvn clean verify` pasa 234 pruebas, 0 fallos y 0 omitidas (Java 17, MySQL 8.0.46 desechable).
-
 Las vistas comparten el `Scanner` del menú y no cierran `System.in`. Cuando la entrada se acaba, vuelven al menú, que termina normalmente.
+
+### Integración temporal verificada (19/11/2026)
+
+Se hicieron en copias aparte que luego se descartaron, con Java 17.0.21 y MySQL 8.0.46 desechable. Ninguna rama de otros integrantes se modificó.
+
+| Combinación | Resultado de `mvn clean verify` |
+| --- | --- |
+| `develop` + PR #67 + esta rama + menú conectado (sobre el menú del PR #67) | 234 aprobadas, 0 fallidas, 0 omitidas |
+| PR #70 (`fae432b`) + esta rama + prueba de aceptación, sin tocar el menú | 256 aprobadas, 0 fallidas, 0 omitidas |
+| PR #70 + esta rama + prueba de aceptación + menú conectado (cambio de arriba) | 255 aprobadas, 0 fallidas, 0 omitidas |
+
+Las ramas se fusionan sin conflictos. `EsquemaInventarioPrueba` tiene en esta rama exactamente el mismo cambio que el PR #70 (`crearConsolidado()`), así que la fusión de ese archivo también es limpia.
 
 ## 7. Evidencia de pruebas
 
@@ -218,9 +215,10 @@ Comando: `mvn clean verify` con Java 17.0.21 y Maven 3.9.11. Las pruebas JDBC so
 | Reglas de negocio y controlador | `InventarioServiceTest`, `InventarioControladorTest`, `InventarioFlujoIntegracionTest` | 31 | 31 | 0 | 3 |
 | Modelos | `RepuestoTest`, `ProveedorTest` | 17 | 17 | 0 | 0 |
 | Base de pruebas desechable | `EsquemaInventarioPruebaTest` | 3 | 3 | 0 | 3 |
-| **Total Inventario y Proveedores** | | **139** | **139** | **0** | **50** |
+| Aceptación sobre el esquema consolidado (PR #70) | `AceptacionInventarioProveedoresTest` | 4 | 4 en la combinación con el PR #70 | 0 | 4 (también con MySQL mientras `esquema.sql` no esté en la rama) |
+| **Total Inventario y Proveedores** | | **143** | **139 en esta rama + 4 en la combinación** | **0** | **54** |
 | Resto del proyecto | otros módulos | 75 | 75 | 0 | 0 |
-| **Total del proyecto** | | **214** | **214** | **0** | **50** |
+| **Total del proyecto en esta rama** | | **218** | **214** (4 omitidas: aceptación) | **0** | **54** |
 
 Las pruebas detectan errores reales. Se comprobó con mutaciones temporales, revertidas después:
 
@@ -233,6 +231,21 @@ Las pruebas detectan errores reales. Se comprobó con mutaciones temporales, rev
 
 La clase de integración del adaptador se repitió 10 veces: 10 de 10 sin fallos.
 
+### Prueba de aceptación sobre el esquema consolidado
+
+`AceptacionInventarioProveedoresTest` instala `database/esquema/esquema.sql` completo en una base desechable con `EsquemaInventarioPrueba.crearConsolidado()`. Después maneja las vistas por consola como lo haría un usuario:
+
+1. Comprueba que el esquema tiene exactamente las columnas que usan los DAO (`repuesto_tipos`, `proveedores`, `repuestos`, `servicios_repuestos`) y que no trae tipos de repuesto.
+2. Ejecuta dos veces `repuesto_tipos_iniciales.sql`: quedan 6 tipos sin duplicados y la estructura de tablas y columnas no cambia.
+3. **Sesión 1:** registra el proveedor *AutoPartes SAS* y el repuesto *Filtro de aceite* (stock 10, mínimo 3); entrada de 5 → 15; salida de 12 → 3; una salida de 4 se rechaza por stock insuficiente.
+4. **Sesión 2:** con un controlador nuevo, DAO nuevos y conexiones nuevas, buscar, consultar stock y buscar el proveedor por nombre muestran los mismos datos.
+5. Una conexión SQL independiente confirma lo guardado: stock 3, tipo, precio y contacto del proveedor.
+6. Sin inicializar los tipos, el registro de un repuesto se rechaza con un mensaje claro y no guarda nada.
+
+Si las transacciones de stock hicieran `rollback` en lugar de `commit`, la prueba falla (mutación comprobada).
+
+En esta rama la prueba queda **omitida**, porque `esquema.sql` todavía no está publicado aquí. Se ejecuta sola cuando el archivo llegue con el PR #70. Hoy pasa 4 de 4 en la combinación PR #70 + esta rama.
+
 | Verificación final | Prueba que lo demuestra |
 | --- | --- |
 | No se permite stock negativo | `unaSalidaSinStockSuficienteMuestraElErrorYNoCambiaNada`, `RepuestoDAOTransaccionIntegracionTest` (20 salidas simultáneas sobre 10 unidades: se aceptan exactamente 10) |
@@ -242,11 +255,37 @@ La clase de integración del adaptador se repitió 10 veces: 10 de 10 sin fallos
 | Un rollback revierte todo | `siFallaUnaOperacionSeDeshaceTodaLaTransaccionDeNegocio`, `TransaccionTest` |
 | No hay fugas de conexiones | `noQuedanConexionesAbiertasTrasOperacionesCorrectasYFallidas` |
 | Las vistas funcionan con entradas válidas e inválidas | `VistaInventarioTest`, `VistaProveedoresTest`, `VistasInventarioIntegracionTest` |
+| Persistencia entre conexiones sobre el esquema consolidado | `flujoCompletoDesdeLaConsolaPersisteEntreConexiones` |
 | Compatible con Java 17 | Compilación y pruebas con JDK 17.0.21; GitHub Actions (`Java CI`) |
 
 ## 8. Ejecución
 
-Se necesitan Java 17, Maven y MySQL con los bloques `inventario.sql` (antes) y `servicios.sql`, y al menos un tipo de repuesto en `repuesto_tipos`. La conexión de la aplicación sale de `com.carmotors.config.ConexionFactory`. Para las pruebas JDBC se usan una URL y un usuario de una instancia de pruebas:
+Se necesitan Java 17, Maven y MySQL 8.0.16 o superior. Para instalar la base, use el esquema consolidado `database/esquema/esquema.sql` (PR #70) sobre una base vacía o, en desarrollo, los bloques `inventario.sql` (antes) y `servicios.sql`. La conexión de la aplicación sale de `com.carmotors.config.ConexionFactory`.
+
+### Inicializar `repuesto_tipos` sin modificar el esquema aprobado
+
+El esquema solo crea la tabla `repuesto_tipos` y no inserta datos. Sin al menos un tipo, la opción "Registrar repuesto" se rechaza: *"verifique que el tipo de repuesto exista"*. Los tipos son **datos**, así que se cargan aparte con [`repuesto_tipos_iniciales.sql`](repuesto_tipos_iniciales.sql), sin tocar `esquema.sql`:
+
+```bash
+mysql -u <usuario> -p <base> < database/esquema/esquema.sql            # una sola vez, base vacía
+mysql -u <usuario> -p <base> < docs/inventario/repuesto_tipos_iniciales.sql
+```
+
+```sql
+INSERT INTO repuesto_tipos (nombre) VALUES
+    ('Filtros'), ('Frenos'), ('Lubricantes'), ('Eléctricos'), ('Suspensión'), ('Motor')
+ON DUPLICATE KEY UPDATE nombre = nombre;
+```
+
+- Solo inserta filas: no tiene `CREATE`, `ALTER`, `DROP`, `TRUNCATE` ni `DELETE`.
+- Se puede repetir sin duplicar ni fallar, gracias a `uq_repuesto_tipos_nombre` y a que `ON DUPLICATE KEY UPDATE` no cambia nada. Funciona desde MySQL 8.0.16, la versión mínima del esquema.
+- La lista es una propuesta: para agregar un tipo basta con otro `INSERT INTO repuesto_tipos (nombre) VALUES ('…');`.
+- El ID que pide la consola al registrar un repuesto se consulta con `SELECT id, nombre FROM repuesto_tipos ORDER BY id;`.
+- La prueba de aceptación ejecuta exactamente este archivo y verifica que no cambia la estructura de tablas y columnas.
+
+### Pruebas JDBC
+
+Se usan una URL y un usuario de una instancia de pruebas. Cada prueba crea y borra su propia base `carmotors_prueba_<aleatorio>`:
 
 ```bash
 CARMOTORS_TEST_DB_URL="jdbc:mysql://localhost:3306/" CARMOTORS_TEST_DB_USER=<usuario_pruebas> \
@@ -257,8 +296,8 @@ CARMOTORS_TEST_DB_PASSWORD=<clave_pruebas> mvn clean verify
 
 | Pendiente | Responsable |
 | --- | --- |
-| Conectar `VistaInventario` y `VistaProveedores` a `MenuPrincipal` después del PR #67 (cambio listo en la sección 6). | Zlatan (Servicios / menú) |
+| Conectar `VistaInventario` y `VistaProveedores` a las rutas 4 y 5 de `MenuPrincipal` del PR #70 (cambio y prueba listos en la sección 6). | Zlatan (Servicios / menú) |
 | Usar `InventarioServiciosJdbc` desde `ServicioService` y `ServicioControlador`. | Zlatan |
 | Lotes y devoluciones (D4): fuera de esta entrega. | Fase posterior |
-| Revisar la compatibilidad con `database/esquema/esquema.sql` cuando se publique (hoy no existe en ninguna rama). | Valeria, cuando se publique |
-| No hay pantalla para los tipos de repuesto: el registro pide el ID de un tipo que ya debe existir en `repuesto_tipos`. Las tablas `lotes`, `proveedores_repuestos` y `evaluaciones_proveedor` no tienen código Java. | Fuera de esta entrega |
+| `database/esquema/esquema.sql` llega con el PR #70. La compatibilidad ya se verificó con la prueba de aceptación (4/4). Al fusionarse, la prueba deja de omitirse en esta rama. | Hecho; se repite sola tras fusionar #70 |
+| No hay pantalla para los tipos de repuesto: se cargan con `repuesto_tipos_iniciales.sql` (sección 8) y el registro pide el ID del tipo. Las tablas `lotes`, `proveedores_repuestos` y `evaluaciones_proveedor` no tienen código Java. | Fuera de esta entrega |

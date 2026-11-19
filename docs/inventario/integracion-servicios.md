@@ -26,7 +26,7 @@ Este documento describe qué ofrece el módulo de Inventario al módulo de Servi
 | **D4** — lotes y devoluciones | Fuera del alcance de esta entrega; sin tablas ni funciones nuevas. | No implementado a propósito. |
 | **Transacciones** | Servicios coordina; Inventario recibe la misma conexión JDBC y no hace `commit` ni `rollback` cuando participa en una transacción compartida. | El adaptador nunca confirma, deshace ni cierra la conexión. Prueba: `unErrorJdbcLlegaComoIllegalStateExceptionConLaCausaYSinConfirmarNada`. |
 
-Compatibilidad verificada con el esquema de `develop` (`database/bloques/inventario.sql` y `servicios.sql`): no requiere columnas nuevas ni cambios de SQL. El esquema consolidado (`database/esquema/esquema.sql`) aún no está publicado; cuando lo esté, debe revisarse que conserve `servicios_repuestos` y sus claves.
+Compatibilidad verificada con el esquema de `develop` (`database/bloques/inventario.sql` y `servicios.sql`): no requiere columnas nuevas ni cambios de SQL. El esquema consolidado (`database/esquema/esquema.sql`, PR #70) conserva `repuestos`, `proveedores`, `repuesto_tipos` y `servicios_repuestos` con las mismas columnas y claves; lo verifica `AceptacionInventarioProveedoresTest`.
 
 ### Implementación
 
@@ -63,7 +63,7 @@ Si Servicios ya tiene su propia transacción abierta: `new InventarioServiciosJd
 
 - Conectar el adaptador a `ServicioService`/`ServicioControlador` (módulo de Servicios; no se modificó desde Inventario).
 - D4: movimientos por lote y devolución de unidades ya consumidas (fuera de alcance).
-- Revisar el esquema consolidado cuando se publique.
+- Esquema consolidado: llega con el PR #70 y ya se verificó con `AceptacionInventarioProveedoresTest` (ver `docs/inventario/README.md`, sección 7).
 
 ## 1. Datos involucrados
 
@@ -191,4 +191,4 @@ Cualquier fallo en cualquiera de los dos lados → `rollback` de la transacción
 
 1. Servicios conecta `InventarioServiciosJdbc` a sus casos de uso (registrar repuestos de una orden, consumir al usarlos, liberar o cancelar), dentro de su transacción.
 2. Acordar D4 (lotes y devoluciones) en una fase posterior.
-3. Revisar la compatibilidad con `database/esquema/esquema.sql` cuando se publique.
+3. Repetir `AceptacionInventarioProveedoresTest` al fusionar el PR #70 (hoy pasa 4/4 en la combinación con esta rama).
