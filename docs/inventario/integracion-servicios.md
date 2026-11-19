@@ -15,7 +15,16 @@ Este documento describe qué ofrece el módulo de Inventario al módulo de Servi
 3. Las operaciones relacionadas comparten la misma conexión JDBC y son atómicas: si algo falla, `rollback` completo. → **D6, D7.**
 4. Consumir no vuelve a descontar lo reservado; liberar devuelve solo lo reservado que aún no se consumió.
 
-**Adoptado de la propuesta de Inventario (sección 6), compatible con las reglas anteriores:** D1 `cantidad_reservada` = saldo pendiente; D3 sin reservas parciales; D5 el precio se fija al crear la línea; D8 cancelar libera todo el saldo. **Por confirmar explícitamente con Servicios:** D1, porque cambia el significado que leerán otros módulos de `cantidad_reservada`.
+### Decisiones aprobadas por el revisor técnico (cierre del 19/11/2026)
+
+| Decisión | Regla aprobada | Cómo se cumple |
+|---|---|---|
+| **D1** — cantidad reservada | `servicios_repuestos.cantidad_reservada` es **exclusivamente la cantidad pendiente de consumir**. Ejemplo: reservar 5 → reservada 5; consumir 2 → reservada 3, usada 2; liberar el resto → reservada 0, usada 2. El consumo no vuelve a descontar el stock. | `consumir` mueve unidades de `cantidad_reservada` a `cantidad_usada` sin tocar `repuestos`; `liberar` resta del saldo y lo devuelve al stock. Prueba: `unConsumoParcialPasaUnidadesAUsadasSinVolverADescontarStock`, `liberarDevuelveSoloLoNoConsumidoYNoAlteraLoUsado`. |
+| **D3** — reservas parciales | No hay reservas parciales automáticas: sin stock suficiente, la operación completa falla y se revierte. | `UPDATE … WHERE cantidad_stock >= n` y `StockInsuficienteException`. Prueba: `conStockInsuficienteSeRechazaLaReservaCompletaSinCambios`. |
+| **D5** — precio | El precio unitario se fija al crear la línea; cambios posteriores del inventario no lo alteran. | `INSERT … SELECT precio_venta` solo al crear; `ON DUPLICATE KEY` suma cantidad sin tocar el precio. Prueba: `reservasSucesivasSumanAlSaldoYConservanElPrecioDeLaLinea`. |
+| **D8** — cancelación | Cancelar libera solo lo pendiente; nunca devuelve unidades ya usadas. | `liberarTodo(servicioId)`. Prueba: `cancelarUnServicioLiberaTodoSuSaldoSinTocarLoUsadoNiOtrosServicios`. |
+| **D4** — lotes y devoluciones | Fuera del alcance de esta entrega; sin tablas ni funciones nuevas. | No implementado a propósito. |
+| **Transacciones** | Servicios coordina; Inventario recibe la misma conexión JDBC y no hace `commit` ni `rollback` cuando participa en una transacción compartida. | El adaptador nunca confirma, deshace ni cierra la conexión. Prueba: `unErrorJdbcLlegaComoIllegalStateExceptionConLaCausaYSinConfirmarNada`. |
 
 Compatibilidad verificada con el esquema de `develop` (`database/bloques/inventario.sql` y `servicios.sql`): no requiere columnas nuevas ni cambios de SQL. El esquema consolidado (`database/esquema/esquema.sql`) aún no está publicado; cuando lo esté, debe revisarse que conserve `servicios_repuestos` y sus claves.
 
@@ -34,7 +43,9 @@ Compatibilidad verificada con el esquema de `develop` (`database/bloques/inventa
 | `liberar(s, r, n)` | `+ n` | `cantidad_reservada − n`, solo si `cantidad_reservada >= n`; `cantidad_usada` no cambia |
 | `liberarTodo(s)` (cancelación) | `+` saldo pendiente de cada repuesto | `cantidad_reservada = 0`; `cantidad_usada` no cambia |
 
-Bloqueos en orden fijo (primero `repuestos`, luego `servicios_repuestos`) para evitar interbloqueos. Errores: `StockInsuficienteException`, `RepuestoNoEncontradoException`, `NoSuchElementException` (sin reserva), `IllegalStateException` (supera el saldo pendiente, conexión en `autoCommit` o error JDBC con la `SQLException` como causa, porque el puerto no declara excepciones comprobadas). Ante **cualquier** excepción, quien coordina debe hacer `rollback`.
+Bloqueos en orden fijo (primero `repuestos`, luego `servicios_repuestos`) en **las cuatro operaciones**, también en `consumir` (corrección del cierre: sin ese bloqueo, una transacción que consume y luego reserva se interbloqueaba con reservas simultáneas; lo detecta `transaccionesQueConsumenYReservanNoSeInterbloqueanConReservasSimultaneas`). Si una transacción de Servicios toca varios repuestos, conviene operarlos en orden ascendente de `repuesto_id`; un interbloqueo eventual lo resuelve MySQL abortando una transacción, que se puede reintentar completa. Antes de cancelar, Servicios debería bloquear la fila del servicio (`SELECT id FROM servicios WHERE id = ? FOR UPDATE`) para que no entren reservas nuevas mientras se libera.
+
+`ejecutarEnTransaccion` y las entradas/salidas de `RepuestoDAO` usan `dao.Transaccion`: confirman o hacen `rollback` completo ante cualquier excepción (también `Error`), restauran `autoCommit`, cierran la conexión y **conservan la excepción original** aunque también fallen el `rollback` o la restauración (quedan como suprimidas). Errores: `StockInsuficienteException`, `RepuestoNoEncontradoException`, `NoSuchElementException` (sin reserva), `IllegalStateException` (supera el saldo pendiente, conexión en `autoCommit` o error JDBC con la `SQLException` como causa, porque el puerto no declara excepciones comprobadas). Ante **cualquier** excepción, quien coordina debe hacer `rollback`.
 
 ### Uso desde Servicios
 
@@ -51,8 +62,8 @@ Si Servicios ya tiene su propia transacción abierta: `new InventarioServiciosJd
 ### Pendiente
 
 - Conectar el adaptador a `ServicioService`/`ServicioControlador` (módulo de Servicios; no se modificó desde Inventario).
-- D4 (movimientos por lote) y D8 (devolución de unidades ya consumidas).
-- Confirmar D1 y revisar el esquema consolidado cuando se publique.
+- D4: movimientos por lote y devolución de unidades ya consumidas (fuera de alcance).
+- Revisar el esquema consolidado cuando se publique.
 
 ## 1. Datos involucrados
 
@@ -110,7 +121,7 @@ Atomicidad verificada (issue #53): `registrarEntrada` y `registrarSalida` hacen 
 | Implementación de `InventarioServiciosPort.liberar` | **Implementada** (+ `liberarTodo` para cancelaciones) | — |
 | Consulta de disponibilidad que considere reservas | **Resuelta por D2 = A:** `cantidad_stock` ya excluye lo reservado, así que `hayStockSuficiente` refleja lo disponible | — |
 | Movimiento de unidades por lote | No implementado | D4 |
-| Devolución de unidades ya consumidas | No implementada | D8 |
+| Devolución de unidades ya consumidas | No implementada (fuera de alcance) | D4 |
 
 ## 5. Decisiones planteadas (contexto; lo aprobado está en la sección 0)
 
@@ -169,7 +180,7 @@ Todas dentro de **una** transacción abierta por Servicios:
 
 Cualquier fallo en cualquiera de los dos lados → `rollback` de la transacción completa.
 
-### Preguntas concretas para Servicios
+### Preguntas que se plantearon a Servicios (respondidas en la sección 0)
 
 1. ¿Se aprueba D1 (saldo) tal como describe su propio ejemplo?
 2. ¿Opción A o B para D2? Si es B, `cantidad_stock` sigue siendo stock físico y la disponibilidad se calcula restando los saldos de `servicios_repuestos`.
@@ -179,6 +190,5 @@ Cualquier fallo en cualquiera de los dos lados → `rollback` de la transacción
 ## 7. Próximos pasos
 
 1. Servicios conecta `InventarioServiciosJdbc` a sus casos de uso (registrar repuestos de una orden, consumir al usarlos, liberar o cancelar), dentro de su transacción.
-2. Confirmar D1 (saldo pendiente) y registrar la confirmación en el issue #53.
-3. Acordar D4 (lotes) y D8 (devoluciones) en una fase posterior.
-4. Revisar la compatibilidad con `database/esquema/esquema.sql` cuando se publique.
+2. Acordar D4 (lotes y devoluciones) en una fase posterior.
+3. Revisar la compatibilidad con `database/esquema/esquema.sql` cuando se publique.
