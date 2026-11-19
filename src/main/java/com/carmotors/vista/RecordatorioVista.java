@@ -14,6 +14,9 @@ public class RecordatorioVista {
     private final RecordatorioControlador controlador;
     private final Scanner scanner;
 
+    private static final class EntradaEofException extends RuntimeException {
+    }
+
     public RecordatorioVista() {
         this(new RecordatorioControlador(), new Scanner(System.in));
     }
@@ -37,8 +40,13 @@ public class RecordatorioVista {
             System.out.println("8. Ver alertas de un vehículo");
             System.out.println("9. Notificar recordatorio (evita duplicados)");
             System.out.println("0. Volver");
-            opcion = leerEntero("Opción: ");
-            ejecutar(opcion);
+            try {
+                opcion = leerEntero("Opción: ");
+                ejecutar(opcion);
+            } catch (EntradaEofException e) {
+                System.out.println("\nEntrada finalizada (EOF). Volviendo...");
+                return;
+            }
         } while (opcion != 0);
     }
 
@@ -62,6 +70,8 @@ public class RecordatorioVista {
                 case 0 -> System.out.println("Volviendo...");
                 default -> System.out.println("Opción no válida.");
             }
+        } catch (EntradaEofException e) {
+            throw e;
         } catch (IllegalArgumentException | IllegalStateException e) {
             System.out.println("Dato no válido: " + e.getMessage());
         } catch (Exception e) {
@@ -82,7 +92,7 @@ public class RecordatorioVista {
     private void marcarNotificado() throws Exception {
         int id = leerEntero("ID del recordatorio: ");
         boolean ok = controlador.marcarNotificado(id);
-        System.out.println(ok ? "Marcado como notificado." : "No existe ese recordatorio.");
+        System.out.println(ok ? "Marcado como notificado." : "El recordatorio no existe o ya fue notificado.");
     }
 
     private void notificar() throws Exception {
@@ -109,14 +119,16 @@ public class RecordatorioVista {
 
     private String leerTexto(String mensaje) {
         System.out.print(mensaje);
+        if (!scanner.hasNextLine()) {
+            throw new EntradaEofException();
+        }
         return scanner.nextLine();
     }
 
     private int leerEntero(String mensaje) {
         while (true) {
-            System.out.print(mensaje);
             try {
-                return Integer.parseInt(scanner.nextLine().trim());
+                return Integer.parseInt(leerTexto(mensaje).trim());
             } catch (NumberFormatException e) {
                 System.out.println("Ingrese un número válido.");
             }
@@ -125,9 +137,8 @@ public class RecordatorioVista {
 
     private LocalDate leerFecha(String mensaje) {
         while (true) {
-            System.out.print(mensaje);
             try {
-                return LocalDate.parse(scanner.nextLine().trim());
+                return LocalDate.parse(leerTexto(mensaje).trim());
             } catch (DateTimeParseException e) {
                 System.out.println("Formato inválido. Use AAAA-MM-DD.");
             }
