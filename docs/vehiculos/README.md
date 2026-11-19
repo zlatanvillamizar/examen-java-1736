@@ -67,9 +67,9 @@ Las pruebas JDBC verifican datos persistidos entre conexiones, claves generadas,
 
 La comprobación manual arrancó `Main` con una factoría JDBC temporal en el classpath para apuntar a la instancia desechable. Registró el vehículo `ABC123` con ID 1, lo recuperó por ID y por placa, lo listó, volvió al menú y entró a Servicios y Técnicos antes de salir. Otra ejecución de `Main` recuperó la misma fila y una consulta directa en MySQL confirmó sus datos.
 
-## Decisiones pendientes e integración
+## Formato de placa e integración
 
-- El registro mantiene la regla vigente de 5 a 10 caracteres ASCII alfanuméricos. La propuesta para revisión del equipo es conservarla como regla general y acordar ejemplos aceptados, alcance por tipo de vehículo y tratamiento de separadores antes de endurecerla. La conversión a mayúsculas usa `Locale.ROOT` para que el resultado sea estable entre equipos.
+- El equipo aprobó provisionalmente para esta entrega la regla de 5 a 10 caracteres ASCII alfanuméricos. La regla puede requerir ajustes futuros según los formatos de placa admitidos, incluidos los separadores y las variantes por tipo de vehículo. La conversión a mayúsculas usa `Locale.ROOT` para que el resultado sea estable entre equipos.
 - El menú de la rama base expone Servicios y Vehículos. Los cambios revisados de Recordatorios y de Inventario están en los PR [#54](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/54), [#61](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/61) y [#62](https://github.com/zlatanvillamizar/proyecto-java-grupo03/pull/62). Sus cambios revisados no editan este menú.
 - Para incorporar más vistas, la propuesta es que Zlatan acuerde con Mary y Valeria la numeración y las dependencias antes de editar el menú compartido. Cada opción delegaría en la vista de su módulo con el mismo lector y salida, y ampliaría la prueba de navegación. Las opciones 1, 2 y 0 se conservan durante esa incorporación.
 - La conexión por defecto de la aplicación sigue configurada en código compartido. La prueba JDBC de Vehículos permite apuntar a otro servidor mediante la fuente inyectada.

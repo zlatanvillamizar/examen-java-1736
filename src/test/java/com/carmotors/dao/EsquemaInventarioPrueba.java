@@ -48,10 +48,6 @@ public final class EsquemaInventarioPrueba implements AutoCloseable {
 
     /** Crea una base desechable vacía con las tablas de inventario. */
     public static EsquemaInventarioPrueba crear() throws SQLException, IOException {
-        return crearConTablas(instrucciones(Files.readString(SCRIPT_INVENTARIO, StandardCharsets.UTF_8)));
-    }
-
-    static EsquemaInventarioPrueba crearConTablas(List<String> tablas) throws SQLException {
         String nombre = PREFIJO + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         verificarNombre(nombre);
         try (Connection conexion = conectarAlServidor(); Statement sentencia = conexion.createStatement()) {
@@ -60,13 +56,9 @@ public final class EsquemaInventarioPrueba implements AutoCloseable {
         }
         EsquemaInventarioPrueba esquema = new EsquemaInventarioPrueba(nombre);
         try {
-            esquema.crearTablas(tablas);
-        } catch (SQLException | RuntimeException e) {
-            try {
-                esquema.close();
-            } catch (SQLException limpieza) {
-                e.addSuppressed(limpieza);
-            }
+            esquema.crearTablas();
+        } catch (SQLException | IOException | RuntimeException e) {
+            esquema.close();
             throw e;
         }
         return esquema;
@@ -78,17 +70,8 @@ public final class EsquemaInventarioPrueba implements AutoCloseable {
             throw new IllegalStateException("La base de prueba ya fue eliminada");
         }
         Connection conexion = conectarAlServidor();
-        try {
-            conexion.setCatalog(base);
-            return conexion;
-        } catch (SQLException e) {
-            try {
-                conexion.close();
-            } catch (SQLException cierre) {
-                e.addSuppressed(cierre);
-            }
-            throw e;
-        }
+        conexion.setCatalog(base);
+        return conexion;
     }
 
     /** Ejecuta una instrucción SQL en la base desechable (para datos de apoyo). */
@@ -115,9 +98,10 @@ public final class EsquemaInventarioPrueba implements AutoCloseable {
         eliminada = true;
     }
 
-    private void crearTablas(List<String> tablas) throws SQLException {
+    private void crearTablas() throws SQLException, IOException {
+        String script = Files.readString(SCRIPT_INVENTARIO, StandardCharsets.UTF_8);
         try (Connection conexion = conectar(); Statement sentencia = conexion.createStatement()) {
-            for (String instruccion : tablas) {
+            for (String instruccion : instrucciones(script)) {
                 sentencia.execute(instruccion);
             }
         }
@@ -140,7 +124,7 @@ public final class EsquemaInventarioPrueba implements AutoCloseable {
      * Divide el script en instrucciones, sin comentarios ni el {@code USE}
      * (así nunca cambia a la base real {@code carmotors}).
      */
-    static List<String> instrucciones(String script) {
+    private static List<String> instrucciones(String script) {
         StringBuilder limpio = new StringBuilder();
         for (String linea : script.split("\\R")) {
             String recortada = linea.strip();

@@ -12,8 +12,6 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -25,22 +23,16 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@EnabledIfEnvironmentVariable(named = EsquemaInventarioPrueba.VARIABLE_URL, matches = ".+")
+@EnabledIfEnvironmentVariable(named = EsquemaVehiculosPrueba.VARIABLE_URL, matches = ".+")
 class VehiculoDAOIntegracionTest {
-    private EsquemaInventarioPrueba esquema;
+    private EsquemaVehiculosPrueba esquema;
     private VehiculoDAO dao;
     private VehiculoControlador controlador;
     private final List<Connection> conexiones = new ArrayList<>();
 
     @BeforeEach
     void preparar() throws Exception {
-        Path bloques = Path.of("database", "bloques");
-        String clientes = EsquemaInventarioPrueba.instrucciones(Files.readString(bloques.resolve("clientes.sql")))
-                .stream().filter(sql -> sql.startsWith("CREATE TABLE clientes ("))
-                .findFirst().orElseThrow();
-        List<String> tablas = new ArrayList<>(List.of(clientes));
-        tablas.addAll(EsquemaInventarioPrueba.instrucciones(Files.readString(bloques.resolve("vehiculos.sql"))));
-        esquema = EsquemaInventarioPrueba.crearConTablas(tablas);
+        esquema = EsquemaVehiculosPrueba.crear();
         esquema.ejecutar("INSERT INTO clientes (id, nombre, documento_identidad, email) "
                 + "VALUES (1, 'Cliente de prueba', 'TEST-1', 'vehiculos@example.test')");
         dao = new VehiculoDAO(this::conexionObservada);
@@ -68,7 +60,7 @@ class VehiculoDAOIntegracionTest {
     @AfterEach
     void eliminarEsquema() throws SQLException {
         if (esquema != null) {
-            try (EsquemaInventarioPrueba base = esquema) {
+            try (EsquemaVehiculosPrueba base = esquema) {
                 for (Connection conexion : conexiones) {
                     try (conexion) {
                         assertTrue(conexion.isClosed(),
@@ -131,7 +123,7 @@ class VehiculoDAOIntegracionTest {
     void propagaRechazoRealDeConexion() {
         String usuarioInexistente = UUID.randomUUID().toString().replace("-", "");
         VehiculoDAO sinAcceso = new VehiculoDAO(() -> DriverManager.getConnection(
-                System.getenv(EsquemaInventarioPrueba.VARIABLE_URL), usuarioInexistente, ""));
+                System.getenv(EsquemaVehiculosPrueba.VARIABLE_URL), usuarioInexistente, ""));
         SQLException error = assertThrows(SQLException.class, sinAcceso::listar);
         assertEquals("28000", error.getSQLState());
     }
