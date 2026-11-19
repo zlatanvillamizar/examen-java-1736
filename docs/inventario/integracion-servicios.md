@@ -2,6 +2,7 @@
 
 **Responsable de Inventario:** Valeria · **Responsable de Servicios:** Zlatan
 **Estado:** borrador para acordar. Nada de lo marcado como *propuesta* o *por acordar* es una decisión definitiva.
+**Actualización 19/11/2026 (issue #53):** la sección 6 contiene la propuesta de Inventario para D1–D9, **pendiente de aprobación** del responsable de Servicios.
 **Relacionado:** issues #16 y #32, PR #44, [`docs/servicios/integracion-inventario.md`](../servicios/integracion-inventario.md) y [`docs/servicios/contratos-pendientes.md`](../servicios/contratos-pendientes.md).
 
 Este documento describe qué ofrece hoy el módulo de Inventario al módulo de Servicios, qué falta y qué deben acordar ambos responsables antes de implementar reservas, consumo y liberación de repuestos.
@@ -51,6 +52,8 @@ Limitaciones actuales:
 - `registrarEntrada` y `registrarSalida` modifican solo `repuestos.cantidad_stock`; **no** modifican `lotes.cantidad_disponible` (ver D4).
 - Cada operación abre su propia conexión. No pueden participar todavía en una transacción junto con cambios en `servicios_repuestos` (ver D6).
 
+Atomicidad verificada (issue #53): `registrarEntrada` y `registrarSalida` hacen `rollback` ante cualquier error JDBC (incluido un fallo al confirmar), restauran el *autocommit* y no dejan cambios en la base; 20 salidas simultáneas sobre 10 unidades aceptan exactamente 10 y el stock nunca queda negativo. Pruebas: `RepuestoDAOTransaccionTest` (sin MySQL) y `RepuestoDAOTransaccionIntegracionTest` (MySQL en base desechable).
+
 ## 4. Operaciones pendientes
 
 | Operación | Estado | Bloqueada por |
@@ -90,7 +93,42 @@ Cada punto incluye opciones para discutir; **ninguna está elegida**.
 
 **D9. Ubicación del código.** En qué paquete vive la implementación del puerto. Depende de la convención de nombres pendiente (`servicios` o `servicio`; ver PR #47 e issue #46).
 
-## 6. Próximos pasos propuestos
+## 6. Propuesta de Inventario para D1–D9 (pendiente de aprobación)
+
+> Propuesta del responsable de Inventario para discutir con Servicios. **No es una decisión aprobada** y no se implementará hasta que ambos responsables la acepten, la modifiquen o la reemplacen. Cada punto indica la evidencia en la que se apoya.
+
+| # | Propuesta | Evidencia / motivo |
+|---|---|---|
+| D1 | `cantidad_reservada` guarda el **saldo pendiente** (reservado aún no consumido ni liberado). | Es lo que describe el ejemplo de `docs/servicios/integracion-inventario.md` (reservar 5, usar 3 y liberar 2 deja el saldo en 0 y `cantidad_usada` en 3). Con *acumulado* haría falta una columna para lo liberado, que el esquema no tiene; las reglas 4 y 5 hablan de "reserva pendiente". |
+| D2 | **Opción A: descontar al reservar.** `reservar` resta de `cantidad_stock`; `liberar` suma; `consumir` no cambia `cantidad_stock`. | El descuento ocurre una sola vez (evita descontar dos veces). Reutiliza el `UPDATE … WHERE cantidad_stock >= ?` atómico ya probado, sin que Inventario tenga que sumar `servicios_repuestos` en cada consulta. `hayStockSuficiente` y las alertas de stock mínimo pasan a reflejar lo disponible para reservar. **Contrapartida:** el stock físico en bodega sería `cantidad_stock + Σ cantidad_reservada`; si se prefiere conservar `cantidad_stock` como stock físico, la alternativa es la opción B. |
+| D3 | Rechazar la reserva completa si no hay disponibilidad; **sin reservas parciales**. | Regla 3 ya documentada por Servicios. |
+| D4 | **Fuera del alcance de esta fase.** Las reservas trabajan sobre `cantidad_stock`; los movimientos por lote (`lotes.cantidad_disponible`, selección por `fecha_caducidad`, exclusión de vencidos) se acuerdan en una fase posterior. | Hoy ninguna operación mueve lotes y no hay regla para elegir lote. Mezclarlo ahora agrega decisiones sin datos de prueba. Riesgo conocido: `cantidad_stock` y la suma de lotes pueden no coincidir. |
+| D5 | `precio_unitario_venta` se fija **al crear la línea**, en la primera reserva, con `repuestos.precio_venta`; reservas posteriores de la misma línea conservan ese precio. | La columna es `NOT NULL` sin valor por defecto: debe tener precio desde que se inserta la fila, y la fila nace con la reserva. Mantener un único precio por línea es coherente con la PK `(servicio_id, repuesto_id)`. |
+| D6 | **Servicios abre y confirma la transacción**; el adaptador de Inventario trabaja sobre esa misma `Connection`, sin abrir otra, sin `commit` y sin cerrarla. | `servicios_repuestos` pertenece a Servicios y el cambio de stock a Inventario; ambos deben confirmarse juntos (sección "Consistencia transaccional" del documento de Servicios). Requiere acordar cómo recibe el adaptador la conexión (por constructor o por parámetro); `InventarioServiciosPort` hoy no la recibe. |
+| D7 | Concurrencia con `UPDATE` condicionados en ambos lados: en `repuestos` (`cantidad_stock >= ?`) y en `servicios_repuestos` (`cantidad_reservada >= ?` al consumir o liberar). Si una condición no se cumple, se lanza la excepción y se hace `rollback` de todo. | El mismo patrón ya está probado con 20 salidas simultáneas (sección 3). |
+| D8 | Cancelar una orden **libera todo el saldo** de cada línea (no toca `cantidad_usada`). La devolución de unidades ya consumidas **no se admite en esta fase**. | Regla 6 (liberar no reduce lo consumido). Una devolución necesitaría registrar un movimiento adicional que el esquema no contempla. |
+| D9 | La implementación del puerto vive en el módulo de Inventario (`com.carmotors.servicios.inventario`) hasta que se cierre la convención de nombres. | Hoy conviven `servicio.taller` (donde está el puerto) y `servicios.inventario`/`clientes`/`vehiculos`/`facturacion` (issue #46). |
+
+### Secuencias resultantes si se aprueba la propuesta (opción A)
+
+Todas dentro de **una** transacción abierta por Servicios:
+
+| Operación | Inventario (`repuestos`) | Servicios (`servicios_repuestos`) |
+|---|---|---|
+| `reservar(s, r, n)` | `UPDATE repuestos SET cantidad_stock = cantidad_stock - n WHERE id = r AND cantidad_stock >= n`; 0 filas → stock insuficiente o repuesto inexistente | Inserta la línea `(s, r, n, 0, precio_venta)` o suma `n` a `cantidad_reservada` si ya existe |
+| `consumir(s, r, n)` | Sin cambios en `cantidad_stock` (ya se descontó al reservar) | `cantidad_reservada -= n`, `cantidad_usada += n`, con la condición `cantidad_reservada >= n` |
+| `liberar(s, r, n)` | `cantidad_stock += n` | `cantidad_reservada -= n`, con la condición `cantidad_reservada >= n`; `cantidad_usada` no cambia |
+
+Cualquier fallo en cualquiera de los dos lados → `rollback` de la transacción completa.
+
+### Preguntas concretas para Servicios
+
+1. ¿Se aprueba D1 (saldo) tal como describe su propio ejemplo?
+2. ¿Opción A o B para D2? Si es B, `cantidad_stock` sigue siendo stock físico y la disponibilidad se calcula restando los saldos de `servicios_repuestos`.
+3. Para D6: ¿se agrega la `Connection` como parámetro de `InventarioServiciosPort` o el adaptador la recibe al construirse?
+4. ¿Se acepta dejar lotes (D4) y devoluciones (D8) para una fase posterior?
+
+## 7. Próximos pasos propuestos
 
 1. Ambos responsables acuerdan D1 a D9 y registran la decisión en este documento y en el issue #16.
 2. Inventario implementa el puerto según lo acordado, con pruebas unitarias y pruebas de integración en bases desechables.
