@@ -191,4 +191,4 @@ Cualquier fallo en cualquiera de los dos lados → `rollback` de la transacción
 
 1. Servicios conecta `InventarioServiciosJdbc` a sus casos de uso (registrar repuestos de una orden, consumir al usarlos, liberar o cancelar), dentro de su transacción.
 2. Acordar D4 (lotes y devoluciones) en una fase posterior.
-3. Repetir `AceptacionInventarioProveedoresTest` al fusionar el PR #70 (hoy pasa 4/4 en la combinación con esta rama).
+3. Repetir `AceptacionInventarioProveedoresTest` al fusionar el PR #70 (hoy pasa 5/5 en la combinación con esta rama).
