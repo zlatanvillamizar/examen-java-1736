@@ -23,10 +23,9 @@ import java.util.Optional;
  *   <li>Una entrada no puede superar el máximo de la columna {@code INT}.</li>
  * </ul>
  *
- * <p><b>No</b> implementa reservas ni {@code InventarioServiciosPort}: si
- * {@code cantidad_reservada} guarda un saldo o un total acumulado, y cómo se
- * coordina la transacción con {@code servicios_repuestos}, sigue pendiente
- * (ver {@code docs/servicios/integracion-inventario.md} y los issues #16 y #32).</p>
+ * <p>Las reservas, consumos y liberaciones de repuestos para Servicios están en
+ * {@link InventarioServiciosJdbc}, que trabaja dentro de la transacción que coordina
+ * Servicios (issue #53, {@code docs/inventario/integracion-servicios.md}).</p>
  */
 public class InventarioService {
 
