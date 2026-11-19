@@ -1,7 +1,6 @@
 package com.carmotors.dao;
 
 import com.carmotors.controlador.VehiculoControlador;
-import com.carmotors.modelo.Cliente;
 import com.carmotors.modelo.Vehiculo;
 import com.carmotors.servicios.vehiculos.VehiculoService;
 import com.mysql.cj.jdbc.JdbcConnection;
@@ -18,7 +17,6 @@ import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -36,25 +34,7 @@ class VehiculoDAOIntegracionTest {
         esquema.ejecutar("INSERT INTO clientes (id, nombre, documento_identidad, email) "
                 + "VALUES (1, 'Cliente de prueba', 'TEST-1', 'vehiculos@example.test')");
         dao = new VehiculoDAO(this::conexionObservada);
-        // El DAO compartido de Clientes usa la conexión fija de la aplicación.
-        ClienteDAO clientesDePrueba = new ClienteDAO() {
-            @Override
-            public Optional<Cliente> buscarPorId(int id) throws SQLException {
-                try (var conexion = esquema.conectar();
-                     var consulta = conexion.prepareStatement("SELECT id FROM clientes WHERE id = ?")) {
-                    consulta.setInt(1, id);
-                    try (var filas = consulta.executeQuery()) {
-                        if (!filas.next()) {
-                            return Optional.empty();
-                        }
-                        Cliente cliente = new Cliente();
-                        cliente.setId(filas.getInt("id"));
-                        return Optional.of(cliente);
-                    }
-                }
-            }
-        };
-        controlador = new VehiculoControlador(new VehiculoService(dao, clientesDePrueba));
+        controlador = new VehiculoControlador(new VehiculoService(dao, new ClienteDAO(esquema::conectar)));
     }
 
     @AfterEach

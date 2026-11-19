@@ -4,7 +4,7 @@
 
 | Opción | Módulo | Estado en #70 |
 | --- | --- | --- |
-| 1 | Clientes | Ruta pendiente. El controlador y el DAO están disponibles. |
+| 1 | Clientes | Ruta pendiente de vista. El controlador y el DAO ya están en #70. |
 | 2 | Vehículos | Activa. Registra, busca por ID o placa y lista. |
 | 3 | Servicios y Técnicos | Activa. Gestiona órdenes, técnicos y repuestos. La opción 8 abre el submenú de Técnicos. |
 | 4 | Inventario y Repuestos | Activa. Registra y consulta repuestos, stock, entradas, salidas y alertas de stock mínimo. |
@@ -24,6 +24,22 @@ Para registrar repuestos, carga primero [los datos iniciales de tipos](inventari
 - La opción `0` devuelve el control al menú que abrió la vista. Ninguna vista cierra el `Scanner` compartido ni vuelve a llamar a `Main` o a `MenuPrincipal`.
 - Una opción desconocida muestra un mensaje y deja que la persona elija de nuevo. Un dato inválido dentro de una operación se informa en la vista y no causa una salida abrupta.
 - El menú registra una acción de apertura asociada al número. Conecta la acción a la API que publique el módulo y pasa el `Scanner` compartido en la composición. El menú delega el trabajo del módulo a su vista.
+
+## Preparación de Clientes
+
+La comparación de #61 (`a820836`) con el candidato `9ceb167` confirma que `Cliente`, `ClienteDAO`, `ClienteService`, `ClienteControlador`, sus pruebas existentes y el bloque SQL de Clientes ya están en #70. El delta de #61 agrega Recordatorios y Alertas. La única vista de ese delta es `RecordatorioVista`. Clientes depende de su propia tabla y de la conexión JDBC. Vehículos usa `ClienteDAO.buscarPorId` y su clave foránea apunta a `clientes.id`, por lo que Clientes puede conectarse por separado.
+
+Estas son las firmas públicas de `ClienteControlador`. Todas declaran `throws SQLException`.
+
+| Operación | Firma |
+| --- | --- |
+| Registrar | `Cliente registrar(String nombre, String documento, String telefono, String email)` |
+| Buscar por ID | `Optional<Cliente> buscarPorId(int id)` |
+| Buscar por documento | `Optional<Cliente> buscarPorDocumento(String documento)` |
+| Listar | `List<Cliente> listar()` |
+| Actualizar contacto | `boolean actualizarContacto(int id, String telefono, String email)` |
+
+Para habilitar la opción 1 falta una vista de consola que reciba el `Scanner`, la salida y un `ClienteControlador`. Debe ofrecer alta, consultas, listado y actualización de contacto mediante esas firmas. El alta debe mostrar el ID generado para usarlo en Vehículos. La vista puede reutilizar `EntradaConsola` para validar el formato de entrada, volver con `0` y salir con EOF incluso durante una captura. Debe informar cliente ausente, datos inválidos, duplicados y errores JDBC sin interrumpir el menú. La integración requiere una prueba desde `Main` que registre un cliente, use su ID para registrar un vehículo y verifique regreso y EOF. Las pruebas JDBC actuales ya ejercitan ambos controladores reales sobre el esquema consolidado.
 
 ## Lista de verificación para incorporar cambios
 
