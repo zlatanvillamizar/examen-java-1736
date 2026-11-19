@@ -22,8 +22,9 @@ import java.util.Optional;
  *   <li>{@link IllegalStateException}: ya existe un proveedor con ese nombre.</li>
  * </ul>
  *
- * <p>Las reservas de repuestos ({@code InventarioServiciosPort}) no se exponen
- * hasta que se acuerden sus reglas de negocio.</p>
+ * <p>Las reservas de repuestos para órdenes de servicio no pasan por este controlador:
+ * Servicios las coordina en su propia transacción con
+ * {@link com.carmotors.servicios.inventario.InventarioServiciosJdbc}.</p>
  */
 public final class InventarioControlador {
 
