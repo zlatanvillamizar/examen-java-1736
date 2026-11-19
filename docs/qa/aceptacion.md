@@ -122,3 +122,68 @@ CARMOTORS_DB_USER=qa CARMOTORS_DB_PASSWORD='' mvn clean verify
 1. Reconciliar #67 y #62 con #70 antes de integrar, preservando el menú de #70, las correcciones de Vehículos y los esquemas de prueba por bloques y consolidado. Adaptar la prueba histórica de menú al contrato actualizado. Repetir B/E desde Servicios y la suite completa de ambos módulos.
 2. Incorporar las correcciones de EOF de #61/#68 y excluir los detalles sin consumo en #68. Ejecutar nuevamente las cinco regresiones y verificar el DDL consolidado con el DAO de Facturación.
 3. Conectar las rutas pendientes de Clientes, Inventario, Proveedores, Recordatorios y Facturación con el mismo lector. Extender el guion de `Main` para validar entrada inválida, regreso, EOF y recuperación JDBC de cada vista nueva.
+
+## Cierre independiente sobre el candidato actualizado
+
+### Referencias y alcance
+
+| PR o rama | SHA auditado | Papel en la prueba | CI del commit |
+| --- | --- | --- | --- |
+| `develop` | `a2e62d9` | Base de QA | |
+| #69 | `d6c7ed1` | Punto de partida de QA, con las cinco regresiones originales | [Java CI](https://github.com/zlatanvillamizar/proyecto-java-grupo03/actions/runs/44607658677) |
+| #70 | `fae432b` | Candidato de integración. Ya incorpora #67 y una versión anterior del #62 | [Java CI](https://github.com/zlatanvillamizar/proyecto-java-grupo03/actions/runs/44611464697) |
+| #67 | `0fa2744` | Vehículos ya reconciliado en #70 | |
+| #62 | `d248951` | Delta adicional desde el ancestro común `ce2416b` | [Java CI](https://github.com/zlatanvillamizar/proyecto-java-grupo03/actions/runs/44614930768) |
+| #68 | `f1aaf4a` | HEAD que incluye `acbaa71` y el refinamiento posterior de EOF y errores JDBC | [Java CI](https://github.com/zlatanvillamizar/proyecto-java-grupo03/actions/runs/44615281520) |
+| #61 | `a820836` | Recordatorios, sin cambios desde la reproducción anterior | |
+
+La QA parte de `develop` y conserva los cinco casos originales. Para formar las copias temporales se aplicó el delta `develop...#70` sobre QA. En la copia ampliada se aplicó además `ce2416b..d248951` con `git apply --3way --index` y los deltas `develop...#61` y `develop...#68`. El índice de la copia final no contenía conflictos. El menú quedó exactamente como en #70. Los cambios publicados en #69 son de QA.
+
+### Revalidación de los cinco defectos originales
+
+| Regresión | Esperado | Obtenido en la copia ampliada | Estado |
+| --- | --- | --- | --- |
+| EOF en menú de Facturación | Regresar con el Scanner abierto | Retornó normalmente | **Aprobado** |
+| EOF en consulta de Facturación, `2\n` | Regresar sin excepción ni cerrar el Scanner | Retornó normalmente | **Aprobado** |
+| Facturar una orden con una línea liberada y `cantidad_usada = 0` | Excluir el detalle y facturar la mano de obra | Factura de 10,00, sin detalle | **Aprobado** |
+| EOF en menú de Recordatorios | Regresar con el Scanner abierto | `NoSuchElementException: No line found` | **Fallido** |
+| EOF al listar recordatorios por vehículo, `4\n` | Regresar sin excepción ni cerrar el Scanner | `NoSuchElementException: No line found` | **Fallido** |
+
+Evidencia en `VistasEofAceptacionTest` (6 casos, 2 fallidos) y `FlujosJdbcAceptacionTest` (8 casos, todos aprobados). El retorno explícito con 0 y el lector abierto pasaron en ambas vistas directas. Mary mantiene el bloqueo de EOF en #61.
+
+### Rutas reales desde Main
+
+Cada ruta se ejecutó desde `com.carmotors.Main` con la entrada indicada, verificando salida de proceso 0, retorno al menú y ausencia de excepciones. Las opciones pendientes mostraron el aviso de #70.
+
+| Módulo | Guion | Resultado |
+| --- | --- | --- |
+| Clientes | `1, 0` | **Pendiente de integración** |
+| Vehículos | `2, 0, 0` | **Aprobado** |
+| Servicios | `3, 0, 0` | **Aprobado** |
+| Técnicos | `3, 8, 0, 0, 0` | **Aprobado** |
+| Inventario | `4, 0` | **Pendiente de integración**. Pasaron las pruebas de vista directa de #62. |
+| Proveedores | `5, 0` | **Pendiente de integración**. Pasaron las pruebas de vista directa de #62. |
+| Recordatorios | `6, 0` | **Pendiente de integración**. El EOF de su vista sigue fallando. |
+| Facturación | `7, 0` | **Pendiente de integración**. La vista directa y el flujo JDBC evaluado pasaron. |
+
+### Flujos cruzados
+
+| Escenario | Resultado observado | Estado y evidencia |
+| --- | --- | --- |
+| Cliente → Vehículo → Servicio → reserva, consumo y facturación | Alta enlazada, stock 8 de 10, reserva 0, consumo 2 y una factura por 30,00 | **Aprobado**. `facturaUnaSolaVezBajoCompetenciaTrasConsumirUnaReservaReal`. |
+| Cancelación y liberación | Stock final 7, saldo 0 y consumo 3 conservado. Repetir la cancelación no devolvió stock dos veces. | **Aprobado**. `ServicioInventarioIntegracionTest.conservaPrecioYConsumoAlCancelarYAplicaLasClavesDeFacturacion`. |
+| Recordatorio y notificación | Alertas clasificadas, notificación releída en otra conexión y retirada de próximos. | **Aprobado**. `clasificaRecordatoriosYConservaLaNotificacionEntreConexiones`. |
+| Duplicados y concurrencia | Una sola emisión entre dos solicitudes concurrentes a la misma orden. El controlador y la restricción de MySQL también rechazaron duplicados. La competencia entre dos órdenes por stock confirmó una sola reserva. | **Aprobado**. `FlujosJdbcAceptacionTest`, `ServicioInventarioIntegracionTest` e `InventarioServiciosJdbcIntegracionTest`. |
+| Rollback y recuperación | FK inválida revirtió stock y líneas. Otro caso revirtió el alta y las reservas al fallar una operación. Después del error se completó una operación válida. | **Aprobado**. `FlujosJdbcAceptacionTest` y `ServicioInventarioIntegracionTest`. |
+
+### Maven y evidencia
+
+Java 17.0.7, Maven 3.6.3 y MySQL 8.0.46 aislado. Repetir con `mvn clean verify` y las variables JDBC ya documentadas para #70. Los detalles por caso se generan en `target/surefire-reports`.
+
+| Configuración | Detectadas | Aprobadas | Fallidas | Omitidas | JDBC real |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| QA sobre `develop` | 167 | 155 | 0 | 12 | 25 |
+| QA + #70 | 242 | 232 | 0 | 10 | 58 |
+| QA + #70 + deltas de #62, #68 y #61 | 356 | 354 | 2 | 0 | 71 |
+
+El candidato ampliado conserva dos fallos reproducibles en Recordatorios. Para aprobar la consola integral faltan la corrección de EOF en #61 y la conexión desde Main de las cinco rutas pendientes. Tras aplicar esos cambios, repetir las regresiones, el recorrido real de las ocho rutas y la suite completa con MySQL. El PR #69 sigue abierto.
