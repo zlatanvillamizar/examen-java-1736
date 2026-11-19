@@ -8,6 +8,7 @@ import com.carmotors.modelo.Vehiculo;
 import java.sql.SQLException;
 import java.time.Year;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -58,7 +59,7 @@ public class VehiculoService {
                     "La placa es obligatoria");
         }
 
-        placa = placa.trim().toUpperCase();
+        placa = placa.trim().toUpperCase(Locale.ROOT);
 
         if (!placa.matches("[A-Z0-9]{5,10}")) {
             throw new IllegalArgumentException(
@@ -77,12 +78,20 @@ public class VehiculoService {
             throw new IllegalArgumentException(
                     "La marca es obligatoria");
         }
+        if (vehiculo.getMarca().codePointCount(0, vehiculo.getMarca().length()) > 50) {
+            throw new IllegalArgumentException(
+                    "La marca debe tener como máximo 50 caracteres");
+        }
 
         // Validar modelo
         if (vehiculo.getModelo() == null ||
                 vehiculo.getModelo().isBlank()) {
             throw new IllegalArgumentException(
                     "El modelo es obligatorio");
+        }
+        if (vehiculo.getModelo().codePointCount(0, vehiculo.getModelo().length()) > 50) {
+            throw new IllegalArgumentException(
+                    "El modelo debe tener como máximo 50 caracteres");
         }
 
         // Validar año
@@ -122,7 +131,7 @@ public class VehiculoService {
         }
 
         return vehiculoDAO.buscarPorPlaca(
-                placa.trim().toUpperCase());
+                placa.trim().toUpperCase(Locale.ROOT));
     }
 
     // Listar todos los vehículos
