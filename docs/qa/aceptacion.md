@@ -187,3 +187,16 @@ Java 17.0.7, Maven 3.6.3 y MySQL 8.0.46 aislado. Repetir con `mvn clean verify` 
 | QA + #70 + deltas de #62, #68 y #61 | 356 | 354 | 2 | 0 | 71 |
 
 El candidato ampliado conserva dos fallos reproducibles en Recordatorios. Para aprobar la consola integral faltan la corrección de EOF en #61 y la conexión desde Main de las cinco rutas pendientes. Tras aplicar esos cambios, repetir las regresiones, el recorrido real de las ocho rutas y la suite completa con MySQL. El PR #69 sigue abierto.
+
+### Revalidación tras conectar Inventario y Proveedores
+
+Durante el cierre, #70 avanzó a `9ceb167`, que ya incluye `d248951` de #62. Se repitió la prueba sobre un árbol nuevo con ese candidato y sobre otro que agregó únicamente #61 `a820836` y #68 `f1aaf4a`. No se aplicó otra vez #62. [Java CI del candidato](https://github.com/zlatanvillamizar/proyecto-java-grupo03/actions/runs/44616223407).
+
+| Configuración con MySQL 8 aislado | Detectadas | Aprobadas | Fallidas | Omitidas | JDBC real |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| QA + #70 `9ceb167` | 275 | 265 | 0 | 10 | 67 |
+| QA + #70 `9ceb167` + #61 + #68 | 354 | 352 | 2 | 0 | 71 |
+
+Las tres regresiones de Facturación y los ocho casos JDBC de `FlujosJdbcAceptacionTest` volvieron a pasar. Los dos fallos de la suite ampliada siguen siendo EOF en Recordatorios. El comando de ambas ejecuciones fue `mvn clean verify` con la configuración de MySQL anterior.
+
+La sonda desde `Main` volvió a comprobar las ocho rutas en la copia ampliada. **Inventario (4) y Proveedores (5) pasan** al entrar, volver con 0 y salir con 0. Vehículos (2), Servicios (3) y Técnicos (3 → 8) también pasan. Clientes (1), Recordatorios (6) y Facturación (7) siguen **pendientes de integración** y muestran el aviso. La corrección de EOF corresponde a Mary. La incorporación de las tres rutas y su validación final corresponden a Zlatan y a los responsables de cada vista.
