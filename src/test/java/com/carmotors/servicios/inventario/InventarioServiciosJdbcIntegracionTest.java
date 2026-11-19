@@ -410,4 +410,40 @@ class InventarioServiciosJdbcIntegracionTest {
         assertTrue(stock(FILTRO) >= 0);
         assertTrue(linea(SERVICIO_A, FILTRO)[0] >= 0 && linea(SERVICIO_B, FILTRO)[0] >= 0);
     }
+
+    @Test
+    void transaccionesQueConsumenYReservanNoSeInterbloqueanConReservasSimultaneas() throws Exception {
+        reservar(SERVICIO_A, FILTRO, 5);
+        AtomicInteger turno = new AtomicInteger();
+        AtomicInteger errores = new AtomicInteger();
+
+        List<Future<Void>> resultados = enParalelo(30, () -> {
+            boolean combinada = turno.getAndIncrement() % 2 == 0;
+            try {
+                if (combinada) {
+                    // Una sola transacción de Servicios: consume una unidad y repone la reserva.
+                    transaccion((c, inv) -> {
+                        inv.consumir(new ConsumoRepuesto(SERVICIO_A, FILTRO, 1));
+                        inv.reservar(new ReservaRepuesto(SERVICIO_A, FILTRO, 1));
+                        return null;
+                    });
+                } else {
+                    reservar(SERVICIO_A, FILTRO, 1);
+                }
+            } catch (StockInsuficienteException e) {
+                // Rechazo de negocio válido: la transacción completa se deshizo.
+            } catch (IllegalStateException e) {
+                errores.incrementAndGet();
+                throw e;
+            }
+            return null;
+        });
+        for (Future<Void> r : resultados) {
+            r.get();
+        }
+
+        assertEquals(0, errores.get(), "No debía haber interbloqueos ni otros errores JDBC");
+        assertEquals(STOCK_INICIAL, totalFisico(FILTRO), "bodega + reservado + usado = unidades iniciales");
+        assertTrue(stock(FILTRO) >= 0);
+    }
 }

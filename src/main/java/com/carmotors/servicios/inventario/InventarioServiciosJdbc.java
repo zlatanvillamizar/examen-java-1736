@@ -38,6 +38,15 @@ import java.util.Objects;
  * {@code rollback}</b> de toda la transacción. {@link #ejecutarEnTransaccion} lo hace
  * automáticamente.</p>
  *
+ * <h2>Concurrencia</h2>
+ * <p>Cada operación bloquea primero la fila de {@code repuestos} y después la línea de
+ * {@code servicios_repuestos}, siempre en ese orden. Si Servicios combina varias
+ * operaciones de distintos repuestos en una misma transacción, conviene hacerlas en
+ * orden ascendente de {@code repuesto_id}. MySQL resuelve un interbloqueo eventual
+ * abortando una transacción (la {@link SQLException} llega como causa), que se puede
+ * reintentar completa. Antes de cancelar, Servicios debería bloquear la fila del
+ * servicio para que no entren reservas nuevas mientras se liberan.</p>
+ *
  * <h2>Errores</h2>
  * <ul>
  *   <li>{@link StockInsuficienteException}: no hay stock para reservar.</li>
@@ -100,6 +109,8 @@ public final class InventarioServiciosJdbc implements InventarioServiciosPort {
     public void consumir(ConsumoRepuesto solicitud) {
         Objects.requireNonNull(solicitud, "El consumo es obligatorio");
         enLaTransaccion("consumir", solicitud.servicioId(), solicitud.repuestoId(), () -> {
+            // Mismo orden de bloqueo que reservar y liberar: primero repuestos, luego la línea.
+            repuestos.bloquearParaActualizar(conexion, solicitud.repuestoId());
             // El stock ya se descontó al reservar: solo se mueve el saldo a usadas.
             if (!reservas.consumir(conexion, solicitud.servicioId(), solicitud.repuestoId(),
                     solicitud.cantidad())) {
