@@ -45,7 +45,7 @@ class NavegacionAceptacionTest {
         assertEquals(List.of(menus.split(",")), resultado.menus(), resultado.salida());
     }
 
-    private Resultado ejecutar(String... lineas) {
+    static Resultado ejecutar(String... lineas) {
         var entradaOriginal = System.in;
         var salidaOriginal = System.out;
         var entrada = new EntradaConSeguimiento(String.join("\n", lineas));
@@ -62,7 +62,7 @@ class NavegacionAceptacionTest {
         return new Resultado(bytes.toString(StandardCharsets.UTF_8));
     }
 
-    private record Resultado(String salida) {
+    record Resultado(String salida) {
         List<String> menus() {
             return ENCABEZADO.matcher(salida).results().map(resultado -> resultado.group(1)).toList();
         }
