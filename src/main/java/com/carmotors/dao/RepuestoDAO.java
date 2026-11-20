@@ -9,7 +9,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -42,6 +44,8 @@ public class RepuestoDAO {
             "UPDATE repuestos SET cantidad_stock = cantidad_stock - ? WHERE id = ? AND cantidad_stock >= ?";
     private static final String SQL_LEER_STOCK =
             "SELECT cantidad_stock FROM repuestos WHERE id = ?";
+    private static final String SQL_LISTAR_TIPOS =
+            "SELECT id, nombre FROM repuesto_tipos ORDER BY id";
     private static final String SQL_BLOQUEAR_STOCK =
             "SELECT cantidad_stock FROM repuestos WHERE id = ? FOR UPDATE";
 
@@ -66,6 +70,22 @@ public class RepuestoDAO {
                 repuestos.add(mapear(filas));
             }
             return repuestos;
+        }
+    }
+
+    /**
+     * Tipos de repuesto ({@code repuesto_tipos}) ordenados por id: id → nombre.
+     * Vacío si el catálogo no se ha cargado.
+     */
+    public Map<Integer, String> listarTipos() throws SQLException {
+        try (Connection conexion = fuente.obtener();
+             PreparedStatement sentencia = conexion.prepareStatement(SQL_LISTAR_TIPOS);
+             ResultSet filas = sentencia.executeQuery()) {
+            Map<Integer, String> tipos = new LinkedHashMap<>();
+            while (filas.next()) {
+                tipos.put(filas.getInt("id"), filas.getString("nombre"));
+            }
+            return tipos;
         }
     }
 

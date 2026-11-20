@@ -5,6 +5,8 @@ import com.carmotors.dao.ProveedoresEnMemoria;
 import com.carmotors.dao.RepuestoDAO;
 import com.carmotors.dao.RepuestosEnMemoria;
 import com.carmotors.modelo.Repuesto;
+import com.carmotors.dao.ReservaRepuestoDAO;
+import com.carmotors.servicios.inventario.ConsultaReservas;
 import com.carmotors.servicios.inventario.InventarioService;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,11 +33,17 @@ class VistaInventarioTest {
     private final RepuestosEnMemoria repuestos = new RepuestosEnMemoria();
 
     private String ejecutar(RepuestoDAO dao, String... lineas) {
+        return ejecutar(dao, servicioId -> {
+            throw new SQLException("Consulta de reservas no configurada en esta prueba");
+        }, lineas);
+    }
+
+    private String ejecutar(RepuestoDAO dao, ConsultaReservas consulta, String... lineas) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (PrintStream salida = new PrintStream(bytes, true, StandardCharsets.UTF_8)) {
             Scanner entrada = new Scanner(String.join("\n", lineas));
             InventarioControlador controlador =
-                    new InventarioControlador(new InventarioService(dao, new ProveedoresEnMemoria()));
+                    new InventarioControlador(new InventarioService(dao, new ProveedoresEnMemoria(), consulta));
             new VistaInventario(entrada, salida, controlador).mostrar();
         }
         return bytes.toString(StandardCharsets.UTF_8);
@@ -103,14 +112,14 @@ class VistaInventarioTest {
     void validaLasEntradasSinSalirDelMenu() {
         filtroConStock(5);
 
-        String salida = ejecutar("x", "8", "2", "abc", "2", "0", "5", "1", "-3", "6", "1", "0",
+        String salida = ejecutar("x", "9", "2", "abc", "2", "0", "5", "1", "-3", "6", "1", "0",
                 "1", "Filtro", "Bosch", "1", "12,5",
                 "1", "Filtro", "Bosch", "1", "-1",
                 "1", "", "1", "Filtro", "Bosch", "1", "10.999", "1", "1",
                 "1", "Filtro", "Bosch", "1", "10", "-2",
                 "2", "1", "0");
 
-        assertTrue(salida.contains("Opción inválida. Elija un número entre 0 y 7."), salida);
+        assertTrue(salida.contains("Opción inválida. Elija un número entre 0 y 8."), salida);
         assertTrue(salida.contains("ID del repuesto debe ser un número entero."));
         assertTrue(salida.contains("ID del repuesto debe ser positivo."));
         assertTrue(salida.contains("Cantidad que ingresa debe ser positivo."));
@@ -153,25 +162,76 @@ class VistaInventarioTest {
     }
 
     @Test
-    void unTipoDeRepuestoInexistenteMuestraElMotivo() {
+    void muestraLosTiposAntesDePedirElIdYRechazaUnoQueNoEsta() {
+        repuestos.tipos(Map.of(1, "Filtros", 2, "Frenos"));
+
+        String salida = ejecutar("1", "Filtro", "Bosch", "99", "1", "Pastilla", "Brembo", "2", "80000", "4", "1", "0");
+
+        assertTrue(salida.contains("Tipos disponibles: 1 = Filtros, 2 = Frenos"), salida);
+        assertTrue(salida.contains("El tipo de repuesto 99 no existe. Elija uno de la lista."));
+        assertTrue(salida.contains("Repuesto registrado con ID 1."));
+        assertEquals(1, repuestos.cantidadGuardados(), "El intento con el tipo 99 no se guardó");
+        assertEquals(2, repuestos.buscarPorId(1).orElseThrow().repuestoTipoId());
+    }
+
+    @Test
+    void sinTiposCargadosAvisaComoCargarlosYNoPideDatos() {
+        repuestos.tipos(Map.of());
+
+        String salida = ejecutar("1", "Filtro", "Bosch", "0");
+
+        assertTrue(salida.contains("No hay tipos de repuesto registrados. Cárguelos con "
+                + "docs/inventario/repuesto_tipos_iniciales.sql"), salida);
+        assertFalse(salida.contains("ID del tipo de repuesto"), "No pide el tipo ni el resto de datos");
+        assertEquals(0, repuestos.cantidadGuardados());
+    }
+
+    @Test
+    void siLaBaseRechazaElTipoPorUnaCarreraSeMuestraElMotivoSinDetalles() {
         RepuestoDAO sinTipo = new RepuestoDAO(() -> {
-            throw new AssertionError("No debe abrir conexiones");
+            throw new SQLException("No debe abrir conexiones");
         }) {
+            @Override
+            public Map<Integer, String> listarTipos() {
+                return Map.of(1, "Filtros");
+            }
+
             @Override
             public Repuesto registrar(Repuesto repuesto) throws SQLException {
                 throw new SQLIntegrityConstraintViolationException("fk_repuestos_tipo");
             }
-
-            @Override
-            public List<Repuesto> listar() {
-                return List.of();
-            }
         };
 
-        String salida = ejecutar(sinTipo, "1", "Filtro", "Bosch", "99", "100", "1", "1", "0");
+        String salida = ejecutar(sinTipo, "1", "Filtro", "Bosch", "1", "100", "1", "1", "0");
 
         assertTrue(salida.contains("verifique que el tipo de repuesto exista"), salida);
         assertFalse(salida.contains("fk_repuestos_tipo"));
+    }
+
+    @Test
+    void muestraLosRepuestosDeUnaOrdenConLoReservadoYLoUsado() {
+        filtroConStock(7);
+        ConsultaReservas consulta = servicioId -> servicioId == 3
+                ? List.of(new ReservaRepuestoDAO.Linea(3, 1, 1, 2, new BigDecimal("25000.00")))
+                : List.of();
+
+        String salida = ejecutar(repuestos, consulta, "8", "3", "8", "9", "8", "x", "0");
+
+        assertTrue(salida.contains("Repuesto 1 | Filtro de aceite | Reservadas sin usar: 1 | Usadas: 2 | Precio unitario: 25000.00"), salida);
+        assertTrue(salida.contains("Hay 1 unidades reservadas sin usar"));
+        assertTrue(salida.contains("La orden 9 no tiene repuestos reservados ni usados."));
+        assertTrue(salida.contains("ID de la orden de servicio debe ser un número entero."));
+    }
+
+    @Test
+    void unaOrdenSinPendientesNoMuestraElAviso() {
+        filtroConStock(8);
+        ConsultaReservas consulta = servicioId -> List.of(new ReservaRepuestoDAO.Linea(servicioId, 1, 0, 2, new BigDecimal("25000.00")));
+
+        String salida = ejecutar(repuestos, consulta, "8", "3", "0");
+
+        assertTrue(salida.contains("Reservadas sin usar: 0 | Usadas: 2"), salida);
+        assertFalse(salida.contains("unidades reservadas sin usar"));
     }
 
     @Test

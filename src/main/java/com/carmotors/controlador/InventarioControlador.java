@@ -1,5 +1,6 @@
 package com.carmotors.controlador;
 
+import com.carmotors.dao.ReservaRepuestoDAO;
 import com.carmotors.modelo.Proveedor;
 import com.carmotors.modelo.Repuesto;
 import com.carmotors.servicios.inventario.InventarioService;
@@ -7,6 +8,7 @@ import com.carmotors.servicios.inventario.InventarioService;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -45,6 +47,14 @@ public final class InventarioControlador {
                                       BigDecimal precioVenta, int stockInicial, int stockMinimo)
             throws SQLException {
         return inventario.registrarRepuesto(nombre, marca, repuestoTipoId, precioVenta, stockInicial, stockMinimo);
+    }
+
+    public Map<Integer, String> listarTiposDeRepuesto() throws SQLException {
+        return inventario.listarTiposDeRepuesto();
+    }
+
+    public List<ReservaRepuestoDAO.Linea> listarRepuestosDeOrden(int servicioId) throws SQLException {
+        return inventario.listarRepuestosDeOrden(servicioId);
     }
 
     public Optional<Repuesto> buscarRepuesto(int id) throws SQLException {

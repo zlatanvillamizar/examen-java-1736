@@ -46,7 +46,7 @@ class MenuPrincipalTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"1, Clientes, 5", "4, Inventario, 7", "5, Proveedores, 5"})
+    @CsvSource({"1, Clientes, 5", "4, Inventario, 8", "5, Proveedores, 5"})
     void abreVistaRealRechazaOpcionInvalidaYRegresa(String opcion, String titulo, int maximo) {
         String salida = ejecutarMain(opcion + "\nx\n0\n2\n0\n0\n");
         int vista = salida.indexOf("=== " + titulo + " ===");

@@ -1,8 +1,10 @@
 package com.carmotors.servicios.inventario;
 
+import com.carmotors.config.ConexionFactory;
 import com.carmotors.dao.ProveedorDAO;
 import com.carmotors.dao.RepuestoDAO;
 import com.carmotors.dao.RepuestoNoEncontradoException;
+import com.carmotors.dao.ReservaRepuestoDAO;
 import com.carmotors.dao.StockInsuficienteException;
 import com.carmotors.modelo.Proveedor;
 import com.carmotors.modelo.Repuesto;
@@ -10,6 +12,7 @@ import com.carmotors.modelo.Repuesto;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -31,14 +34,20 @@ public class InventarioService {
 
     private final RepuestoDAO repuestos;
     private final ProveedorDAO proveedores;
+    private final ConsultaReservas reservas;
 
     public InventarioService() {
-        this(new RepuestoDAO(), new ProveedorDAO());
+        this(new RepuestoDAO(), new ProveedorDAO(), ConsultaReservas.jdbc(ConexionFactory::obtenerConexion));
     }
 
     public InventarioService(RepuestoDAO repuestos, ProveedorDAO proveedores) {
+        this(repuestos, proveedores, ConsultaReservas.jdbc(ConexionFactory::obtenerConexion));
+    }
+
+    public InventarioService(RepuestoDAO repuestos, ProveedorDAO proveedores, ConsultaReservas reservas) {
         this.repuestos = Objects.requireNonNull(repuestos, "El DAO de repuestos es obligatorio");
         this.proveedores = Objects.requireNonNull(proveedores, "El DAO de proveedores es obligatorio");
+        this.reservas = Objects.requireNonNull(reservas, "La consulta de reservas es obligatoria");
     }
 
     // ---------- repuestos ----------
@@ -49,6 +58,21 @@ public class InventarioService {
             throws SQLException {
         return repuestos.registrar(
                 Repuesto.nuevo(nombre, marca, repuestoTipoId, precioVenta, stockInicial, stockMinimo));
+    }
+
+    /** Tipos de repuesto disponibles (id → nombre), ordenados por id. */
+    public Map<Integer, String> listarTiposDeRepuesto() throws SQLException {
+        return repuestos.listarTipos();
+    }
+
+    /**
+     * Repuestos reservados y usados por una orden de servicio, ordenados por repuesto.
+     *
+     * @throws IllegalArgumentException si el id de la orden no es positivo
+     */
+    public List<ReservaRepuestoDAO.Linea> listarRepuestosDeOrden(int servicioId) throws SQLException {
+        validarId(servicioId, "servicio");
+        return List.copyOf(reservas.listarPorServicio(servicioId));
     }
 
     public Optional<Repuesto> buscarRepuesto(int id) throws SQLException {

@@ -3,6 +3,7 @@ package com.carmotors.servicios.inventario;
 import com.carmotors.dao.ProveedoresEnMemoria;
 import com.carmotors.dao.RepuestoNoEncontradoException;
 import com.carmotors.dao.RepuestosEnMemoria;
+import com.carmotors.dao.ReservaRepuestoDAO;
 import com.carmotors.dao.StockInsuficienteException;
 import com.carmotors.modelo.Proveedor;
 import com.carmotors.modelo.Repuesto;
@@ -145,6 +146,23 @@ class InventarioServiceTest {
         assertTrue(inventario.buscarProveedorPorNombre("Otro").isEmpty());
         assertThrows(IllegalArgumentException.class, () -> inventario.buscarProveedorPorNombre(" "));
         assertThrows(IllegalArgumentException.class, () -> inventario.buscarProveedorPorNombre(null));
+    }
+
+    @Test
+    void listaLosRepuestosDeUnaOrdenYValidaElId() throws Exception {
+        ConsultaReservas consulta = servicioId -> List.of(
+                new ReservaRepuestoDAO.Linea(servicioId, 1, 1, 2, new BigDecimal("25000.00")));
+        InventarioService conReservas = new InventarioService(repuestos, proveedores, consulta);
+
+        assertEquals(1, conReservas.listarRepuestosDeOrden(3).size());
+        assertEquals(3, conReservas.listarRepuestosDeOrden(3).get(0).servicioId());
+        assertThrows(IllegalArgumentException.class, () -> conReservas.listarRepuestosDeOrden(0));
+        assertThrows(NullPointerException.class, () -> new InventarioService(repuestos, proveedores, null));
+    }
+
+    @Test
+    void listaLosTiposDeRepuesto() throws Exception {
+        assertEquals(java.util.Map.of(1, "Filtros"), inventario.listarTiposDeRepuesto());
     }
 
     @Test
