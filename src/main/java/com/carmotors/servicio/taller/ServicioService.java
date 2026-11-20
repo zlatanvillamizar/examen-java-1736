@@ -107,7 +107,9 @@ public final class ServicioService {
         enTransaccion((conexion, inventario) -> {
             bloquearOrden(conexion, servicioId);
             String destino = nombreEstado(conexion, estadoId);
-            if (cancelado(destino)) {
+            // Al cancelar o completar, lo reservado que no se usó vuelve al stock;
+            // lo ya usado no cambia (la factura cobra solo lo usado).
+            if (cancelado(destino) || completado(destino)) {
                 inventario.liberarTodo(id);
             }
             servicios.actualizarEstado(conexion, servicioId, estadoId);
@@ -153,6 +155,10 @@ public final class ServicioService {
 
     private static boolean cancelado(String estado) {
         return "Cancelado".equalsIgnoreCase(estado.strip()) || "Cancelada".equalsIgnoreCase(estado.strip());
+    }
+
+    private static boolean completado(String estado) {
+        return "Completado".equalsIgnoreCase(estado.strip()) || "Completada".equalsIgnoreCase(estado.strip());
     }
 
     private static void validarOrdenOperativa(String estado) {
