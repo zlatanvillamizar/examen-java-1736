@@ -10,10 +10,10 @@ Proyecto académico de Zlatan Ricardo Villamizar Fajardo, Valeria, Crisbely y Ma
 
 ## Instalación y ejecución
 
-Clona la rama de revisión del PR #70. La rama principal de integración es `develop`.
+Clona la rama principal `main`, que reúne todos los módulos (PR #70 y #71 ya fusionados).
 
 ```bash
-git clone --branch integracion/carmotors-final https://github.com/zlatanvillamizar/proyecto-java-grupo03.git
+git clone https://github.com/zlatanvillamizar/proyecto-java-grupo03.git
 cd proyecto-java-grupo03
 java -version
 mvn -version
@@ -47,7 +47,15 @@ CREATE USER 'carmotors_app'@'localhost' IDENTIFIED BY RANDOM PASSWORD;
 GRANT SELECT, INSERT, UPDATE, DELETE ON carmotors.* TO 'carmotors_app'@'localhost';
 ```
 
-Carga los catálogos de estados y tipos de mantenimiento antes de registrar órdenes. Servicios identifica la cancelación por los nombres `Cancelado` o `Cancelada`, sin distinguir mayúsculas. Facturación requiere `Completado`. Registrar un vehículo requiere un cliente existente. Una instalación vacía permite probar la conexión desde **2 → 4** (Vehículos → Listar vehículos).
+El esquema crea las tablas vacías. Antes de registrar órdenes, carga los catálogos de estados y tipos de mantenimiento en la misma base seleccionada. El script añade los estados `Recibido`, `En proceso`, `Completado` y `Cancelado`, y los tipos `Preventivo` y `Correctivo`; se puede volver a ejecutar sin duplicar y conserva el DDL aprobado.
+
+```sql
+SOURCE database/datos/catalogos_servicios.sql
+SELECT id, nombre FROM servicio_estados ORDER BY id;
+SELECT id, nombre FROM mantenimiento_tipos ORDER BY id;
+```
+
+Servicios identifica la cancelación por los nombres `Cancelado` o `Cancelada`, y Facturación solo factura órdenes en `Completado` (sin distinguir mayúsculas): no cambies esos dos nombres. Al completar o cancelar una orden, las unidades reservadas que no se usaron vuelven al stock. Registrar un vehículo requiere un cliente existente. Una instalación vacía permite probar la conexión desde **2 → 4** (Vehículos → Listar vehículos).
 
 Antes de registrar repuestos, puedes cargar el catálogo inicial de Valeria en la misma base seleccionada. El script añade seis nombres, se puede volver a ejecutar y conserva el DDL aprobado.
 
@@ -97,7 +105,7 @@ Las nuevas facturas guardan el detalle, precios y datos de presentación en la m
 
 ## Módulos y arquitectura
 
-| Módulo | Estado de la consola en esta rama |
+| Módulo | Estado de la consola |
 | --- | --- |
 | Clientes | Activa en la opción 1. Registra clientes, muestra su ID, permite buscarlos por ID o documento, listarlos y actualizar su contacto. |
 | Vehículos | Registro y consultas con la vista de #67. |
@@ -108,7 +116,7 @@ Las nuevas facturas guardan el detalle, precios y datos de presentación en la m
 
 Facturación cobra únicamente los repuestos consumidos. La consola usa una tasa de impuestos del 0 % para la demostración académica.
 
-`Main` abre `vista.MenuPrincipal`, que comparte un único `Scanner` con las vistas. Los controladores delegan en las clases de servicio y los DAO ejecutan SQL mediante JDBC. Servicios coordina la transacción y construye el adaptador de Inventario con esa misma conexión. La reserva descuenta unidades disponibles, el consumo las mueve al saldo usado y la liberación devuelve el pendiente. Al cancelar, Servicios bloquea la orden y confirma a la vez el estado y la devolución. La primera reserva fija el precio de la línea.
+`Main` abre `vista.MenuPrincipal`, que comparte un único `Scanner` con las vistas. Los controladores delegan en las clases de servicio y los DAO ejecutan SQL mediante JDBC. Servicios coordina la transacción y construye el adaptador de Inventario con esa misma conexión. La reserva descuenta unidades disponibles, el consumo las mueve al saldo usado y la liberación devuelve el pendiente. Al cancelar o completar, Servicios bloquea la orden y confirma a la vez el estado y la devolución de lo reservado sin usar. La primera reserva fija el precio de la línea.
 
 ## Pruebas
 
