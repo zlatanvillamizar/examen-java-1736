@@ -4,6 +4,7 @@ import com.carmotors.controlador.InventarioControlador;
 import com.carmotors.dao.EsquemaInventarioPrueba;
 import com.carmotors.dao.ProveedorDAO;
 import com.carmotors.dao.RepuestoDAO;
+import com.carmotors.servicios.inventario.ConsultaReservas;
 import com.carmotors.servicios.inventario.InventarioService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -106,7 +107,8 @@ class AceptacionInventarioProveedoresTest {
     /** Controlador nuevo con DAO nuevos: cada operación abre su propia conexión. */
     private InventarioControlador controladorNuevo() {
         return new InventarioControlador(new InventarioService(
-                new RepuestoDAO(esquema::conectar), new ProveedorDAO(esquema::conectar)));
+                new RepuestoDAO(esquema::conectar), new ProveedorDAO(esquema::conectar),
+                ConsultaReservas.jdbc(esquema::conectar)));
     }
 
     private static String consola(InventarioControlador controlador, boolean proveedores, String... lineas) {
@@ -246,11 +248,31 @@ class AceptacionInventarioProveedoresTest {
     }
 
     @Test
+    void laOpcionOchoMuestraLoReservadoYUsadoDeUnaOrdenDesdeMySQL() throws Exception {
+        inicializarTiposDeRepuesto();
+        esquema.ejecutar("INSERT INTO repuestos (nombre, marca, repuesto_tipo_id, precio_venta, cantidad_stock, stock_minimo) "
+                + "VALUES ('Filtro de aceite', 'Bosch', 1, 25000.00, 7, 3)");
+        esquema.ejecutar("INSERT INTO clientes (nombre, documento_identidad, email) VALUES ('Ana', '1001', 'ana@correo.com')");
+        esquema.ejecutar("INSERT INTO vehiculos (cliente_id, placa, marca, modelo, anio) VALUES (1, 'ABC123', 'Mazda', '3', 2020)");
+        esquema.ejecutar("INSERT INTO servicio_estados (nombre) VALUES ('Recibido')");
+        esquema.ejecutar("INSERT INTO mantenimiento_tipos (nombre) VALUES ('Preventivo')");
+        esquema.ejecutar("INSERT INTO servicios (vehiculo_id, mantenimiento_tipo_id, fecha_recepcion, descripcion_problema, estado_id) "
+                + "VALUES (1, 1, '2026-11-20 08:00:00', 'Cambio de aceite', 1)");
+        esquema.ejecutar("INSERT INTO servicios_repuestos (servicio_id, repuesto_id, cantidad_reservada, cantidad_usada, precio_unitario_venta) "
+                + "VALUES (1, 1, 1, 2, 25000.00)");
+
+        String salida = consola(controladorNuevo(), false, "8", "1", "8", "2", "0");
+
+        assertTrue(salida.contains("Repuesto 1 | Filtro de aceite | Reservadas sin usar: 1 | Usadas: 2 | Precio unitario: 25000.00"), salida);
+        assertTrue(salida.contains("La orden 2 no tiene repuestos reservados ni usados."));
+    }
+
+    @Test
     void sinInicializarLosTiposElRegistroDeRepuestoSeRechazaSinGuardar() throws SQLException {
         String salida = consola(controladorNuevo(), false,
-                "1", "Filtro de aceite", "Bosch", "1", "25000.00", "10", "3", "0");
+                "1", "Filtro de aceite", "Bosch", "0");
 
-        assertTrue(salida.contains("verifique que el tipo de repuesto exista"), salida);
+        assertTrue(salida.contains("No hay tipos de repuesto registrados. Cárguelos con docs/inventario/repuesto_tipos_iniciales.sql"), salida);
         assertEquals(0, entero("SELECT COUNT(*) FROM repuestos"));
     }
 

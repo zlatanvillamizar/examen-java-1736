@@ -12,6 +12,7 @@ import java.util.Optional;
 public final class RepuestosEnMemoria extends RepuestoDAO {
 
     private final Map<Integer, Repuesto> datos = new LinkedHashMap<>();
+    private final Map<Integer, String> tipos = new LinkedHashMap<>(Map.of(1, "Filtros"));
     private int movimientos;
 
     public RepuestosEnMemoria() {
@@ -30,6 +31,17 @@ public final class RepuestosEnMemoria extends RepuestoDAO {
 
     public int cantidadGuardados() {
         return datos.size();
+    }
+
+    /** Reemplaza el catálogo de tipos (por defecto: 1 = Filtros). */
+    public void tipos(Map<Integer, String> nuevos) {
+        tipos.clear();
+        tipos.putAll(nuevos);
+    }
+
+    @Override
+    public Map<Integer, String> listarTipos() {
+        return new LinkedHashMap<>(tipos);
     }
 
     @Override

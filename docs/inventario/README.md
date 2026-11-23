@@ -26,13 +26,14 @@ Este módulo controla los repuestos del taller, su stock y los proveedores. Adem
 
 | Opción | Qué hace |
 | --- | --- |
-| 1. Registrar repuesto | Pide nombre, marca, ID del tipo, precio de venta (punto decimal), stock inicial y stock mínimo. |
+| 1. Registrar repuesto | Pide nombre y marca, muestra los tipos disponibles (`1 = Filtros, 2 = Frenos…`) y pide el ID del tipo, el precio de venta (punto decimal), el stock inicial y el stock mínimo. Un tipo que no está en la lista se rechaza antes de guardar. |
 | 2. Buscar repuesto por ID | Muestra el repuesto o avisa que no existe. |
 | 3. Listar repuestos | Lista todos los repuestos por ID y marca los que están en su stock mínimo. |
 | 4. Consultar stock disponible | Muestra el stock disponible y el mínimo, y alerta si conviene reponer. |
 | 5. Registrar entrada | Suma unidades al stock. |
 | 6. Registrar salida | Resta unidades solo si alcanzan. Si no alcanzan, muestra el error y no cambia nada. |
 | 7. Listar repuestos en stock mínimo | Lista los repuestos para reposición. |
+| 8. Ver repuestos de una orden de servicio | Muestra, por repuesto, las unidades reservadas sin usar, las usadas y el precio fijado. Avisa si quedan unidades apartadas: vuelven al stock al liberar, completar o cancelar la orden. |
 | 0. Volver | Regresa al menú principal. |
 
 Sesión real (salida de la consola, sin repetir el menú):
@@ -55,7 +56,7 @@ Repuesto 1 | Filtro de aceite | Stock disponible: 3 | Stock mínimo: 3
 Alerta: el repuesto está en su stock mínimo o por debajo; conviene reponerlo.
 ```
 
-El tipo de repuesto debe existir en `repuesto_tipos`. Si no existe, la vista responde *"La base de datos rechazó el repuesto: verifique que el tipo de repuesto exista."* y no guarda nada.
+El tipo de repuesto debe existir en `repuesto_tipos`. Si el catálogo está vacío, la vista explica cómo cargarlo con `repuesto_tipos_iniciales.sql`; si el ID no está en la lista, responde *"El tipo de repuesto 99 no existe. Elija uno de la lista."* y no guarda nada.
 
 ## 3. Proveedores (`VistaProveedores`)
 
@@ -108,7 +109,7 @@ Servicios coordina la transacción e Inventario mueve el stock. Las reglas aprob
 | **Reservar** n | Baja n **una sola vez**. Si no alcanza, falla todo (sin reservas parciales, D3). | `cantidad_reservada + n`. Al crear la línea se fija el precio (D5). |
 | **Consumir** n | **No cambia**: ya se descontó al reservar. | `cantidad_reservada − n`, `cantidad_usada + n`. No puede superar lo pendiente. |
 | **Liberar** n | Sube n. | `cantidad_reservada − n`. `cantidad_usada` no cambia. |
-| **Cancelar** (`liberarTodo`) | Sube todo lo pendiente. | `cantidad_reservada = 0`. Nunca devuelve lo usado (D8). |
+| **Cancelar o completar** (`liberarTodo`) | Sube todo lo pendiente. | `cantidad_reservada = 0`. Nunca devuelve lo usado (D8). Completar libera desde la revisión del 20/11/2026. |
 
 Ejemplo aprobado de D1 (`cantidad_reservada` es lo pendiente de consumir), con stock inicial de 10:
 

@@ -73,14 +73,15 @@ class VistasInventarioIntegracionTest {
     void inventarioDesdeLaConsolaContraMySQL() throws SQLException {
         String salida = consola(false,
                 "1", "Filtro de aceite", "Bosch", "1", "25000.00", "10", "3",
-                "1", "Bujía", "NGK", "99", "12000.00", "5", "1",
+                "1", "Bujía", "NGK", "99",
                 "5", "1", "5",
                 "6", "1", "12",
                 "6", "1", "4",
                 "4", "1", "7", "3", "0");
 
         assertTrue(salida.contains("Repuesto registrado con ID 1."), salida);
-        assertTrue(salida.contains("verifique que el tipo de repuesto exista"), "La FK del tipo se informa sin detalles");
+        assertTrue(salida.contains("El tipo de repuesto 99 no existe. Elija uno de la lista."), "Un tipo inexistente se rechaza antes de guardar");
+        assertTrue(salida.contains("Tipos disponibles: 1 = Filtros"), "Se muestran los tipos antes de pedir el ID");
         assertTrue(salida.contains("Entrada registrada. Stock actual: 15."));
         assertTrue(salida.contains("Salida registrada. Stock actual: 3."));
         assertTrue(salida.contains("Stock insuficiente: se pidieron 4 y hay 3 disponibles."));
