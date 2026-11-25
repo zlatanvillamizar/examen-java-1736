@@ -3,6 +3,7 @@ package com.carmotors.dao;
 import com.carmotors.config.ConexionFactory;
 import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
+import com.carmotors.modelo.TiempoEntrega;
 import com.carmotors.servicio.taller.RepositorioConsultaOrdenServicio;
 import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
 
@@ -10,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +79,63 @@ public class ServicioDAO implements RepositorioConsultaOrdenServicio<Identificad
             return servicios;
         } catch (SQLException error) {
             throw new IllegalStateException("No se pudieron listar los servicios", error);
+        }
+    }
+
+    public record ServicioConFechas(Servicio servicio, String tipoMantenimiento) {
+    }
+
+    public List<ServicioConFechas> listarCompletadosConFechas() throws SQLException {
+        String sql = """
+                SELECT s.*, m.nombre AS tipo_mantenimiento
+                FROM servicios s
+                JOIN mantenimiento_tipos m ON m.id = s.mantenimiento_tipo_id
+                JOIN servicio_estados e ON e.id = s.estado_id
+                WHERE s.fecha_recepcion IS NOT NULL AND s.fecha_entrega IS NOT NULL
+                  AND LOWER(e.nombre) IN ('completado', 'finalizado')
+                """;
+        try (var conexion = ConexionFactory.obtenerConexion();
+             var sentencia = conexion.prepareStatement(sql);
+             var filas = sentencia.executeQuery()) {
+            List<ServicioConFechas> completados = new ArrayList<>();
+            while (filas.next()) {
+                completados.add(new ServicioConFechas(leer(filas), filas.getString("tipo_mantenimiento")));
+            }
+            return completados;
+        }
+    }
+
+    public Optional<TiempoEntrega> buscarTiempoEntrega(int servicioId) throws SQLException {
+        String sql = """
+                SELECT duracion_estimada_segundos, fecha_entrega_estimada
+                FROM tiempo_entrega WHERE servicio_id = ?
+                """;
+        try (var conexion = ConexionFactory.obtenerConexion();
+             var sentencia = conexion.prepareStatement(sql)) {
+            sentencia.setInt(1, servicioId);
+            try (var filas = sentencia.executeQuery()) {
+                if (!filas.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new TiempoEntrega(servicioId,
+                        Duration.ofSeconds(filas.getLong("duracion_estimada_segundos")),
+                        filas.getObject("fecha_entrega_estimada", LocalDateTime.class)));
+            }
+        }
+    }
+
+    public void guardarTiempoEntrega(TiempoEntrega estimacion) throws SQLException {
+        String sql = """
+                INSERT INTO tiempo_entrega (servicio_id, duracion_estimada_segundos, fecha_entrega_estimada)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE servicio_id = tiempo_entrega.servicio_id
+                """;
+        try (var conexion = ConexionFactory.obtenerConexion();
+             var sentencia = conexion.prepareStatement(sql)) {
+            sentencia.setInt(1, estimacion.servicioId());
+            sentencia.setLong(2, estimacion.duracionEstimada().toSeconds());
+            sentencia.setObject(3, estimacion.fechaEntregaEstimada());
+            sentencia.executeUpdate();
         }
     }
 

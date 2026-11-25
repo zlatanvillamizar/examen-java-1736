@@ -51,6 +51,82 @@ class FlujosJdbcAceptacionTest {
     Path temporal;
 
     @Test
+    void muestraLosPromediosDeOrdenesCompletadasConEntregaDesdeMysql() throws Exception {
+        try (var esquema = EsquemaInventarioPrueba.crearConsolidado()) {
+            int vehiculo = registrarVehiculo(esquema).getId();
+            cargarCatalogos(esquema, "Completado");
+            esquema.ejecutar("INSERT INTO mantenimiento_tipos (id, nombre) VALUES (2, 'Correctivo')");
+            esquema.ejecutar("INSERT INTO servicio_estados (id, nombre) VALUES (2, 'En proceso'), (3, 'Finalizado')");
+            var recepcion = LocalDateTime.of(2026, 11, 19, 22, 0);
+            var dao = new ServicioDAO();
+            try (var conexion = esquema.conectar()) {
+                dao.registrar(conexion, new Servicio(null, vehiculo, 1, recepcion,
+                        recepcion.plusHours(4), "Revisión", null, 1));
+                dao.registrar(conexion, new Servicio(null, vehiculo, 1, recepcion,
+                        recepcion.plusHours(5).plusMinutes(4), "Revisión", null, 3));
+                dao.registrar(conexion, new Servicio(null, vehiculo, 1, recepcion,
+                        recepcion.plusDays(10), "Entrega prevista", null, 2));
+                dao.registrar(conexion, new Servicio(null, vehiculo, 2, recepcion,
+                        null, "Entrega pendiente de registro", null, 1));
+            }
+
+            String salida = main(esquema, "3", "12", "0", "0");
+            assertTrue(salida.contains("Preventivo            | 0 Días, 4 Horas, 32 Minutos"), salida);
+            assertTrue(salida.contains("Correctivo            | Sin servicios completados con ambas fechas"), salida);
+        }
+    }
+
+    @Test
+    void guardaLaEstimacionPorOrdenYLaReutilizaAlCambiarElHistorial() throws Exception {
+        try (var esquema = EsquemaInventarioPrueba.crearConsolidado()) {
+            int vehiculo = registrarVehiculo(esquema).getId();
+            cargarCatalogos(esquema, "Finalizado");
+            esquema.ejecutar("INSERT INTO mantenimiento_tipos (id, nombre) VALUES (2, 'Correctivo')");
+            esquema.ejecutar("INSERT INTO servicio_estados (id, nombre) VALUES (2, 'Pendiente')");
+            var recepcion = LocalDateTime.of(2026, 11, 19, 22, 0);
+            var dao = new ServicioDAO();
+            long historial;
+            long orden;
+            long sinHistorial;
+            long conFechaProvisional;
+            try (var conexion = esquema.conectar()) {
+                historial = dao.registrar(conexion, new Servicio(null, vehiculo, 1, recepcion.minusDays(1),
+                        recepcion.minusDays(1).plusHours(5).plusMinutes(30), "Historial", null, 1)).valor();
+                orden = dao.registrar(conexion, new Servicio(null, vehiculo, 1, recepcion,
+                        null, "Pendiente", null, 2)).valor();
+                sinHistorial = dao.registrar(conexion, new Servicio(null, vehiculo, 2, recepcion,
+                        null, "Pendiente", null, 2)).valor();
+                conFechaProvisional = dao.registrar(conexion, new Servicio(null, vehiculo, 2, recepcion,
+                        recepcion.plusDays(1).plusHours(3).plusMinutes(30), "Entrega prevista", null, 2)).valor();
+            }
+
+            String salida = main(esquema, "8", "1", Long.toString(orden),
+                    "1", Long.toString(sinHistorial), "1", Long.toString(conFechaProvisional), "2", "0", "0");
+            assertTrue(salida.contains("Tiempo estimado de espera: 0 Días, 5 Horas, 30 Minutos"), salida);
+            assertTrue(salida.contains("Fecha estimada de entrega: 2026-11-20 03:30"), salida);
+            assertTrue(salida.contains("No hay órdenes finalizadas con ambas fechas para estimar"), salida);
+            assertTrue(salida.contains("Estimación provisional basada en la fecha de entrega registrada"), salida);
+            assertTrue(salida.contains("Tiempo estimado de espera: 1 Días, 3 Horas, 30 Minutos"), salida);
+            assertTrue(salida.contains("Fecha estimada de entrega: 2026-11-21 01:30"), salida);
+            assertTrue(salida.contains("INFORME DE TIEMPOS PROMEDIO DE REPARACIÓN"), salida);
+
+            try (var conexion = esquema.conectar();
+                 var consulta = conexion.prepareStatement(
+                         "SELECT servicio_id, duracion_estimada_segundos FROM tiempo_entrega");
+                 var filas = consulta.executeQuery()) {
+                assertTrue(filas.next());
+                assertEquals(orden, filas.getLong("servicio_id"));
+                assertEquals(19_800, filas.getLong("duracion_estimada_segundos"));
+                assertFalse(filas.next());
+            }
+            esquema.ejecutar("UPDATE servicios SET fecha_entrega = DATE_ADD(fecha_entrega, INTERVAL 1 HOUR)"
+                    + " WHERE id = " + historial);
+            String segundaConsulta = main(esquema, "8", "1", Long.toString(orden), "0", "0");
+            assertTrue(segundaConsulta.contains("Fecha estimada de entrega: 2026-11-20 03:30"), segundaConsulta);
+        }
+    }
+
+    @Test
     void registraClienteYVehiculoYCompruebaLaRelacionPersistida() throws Exception {
         try (var esquema = EsquemaInventarioPrueba.crearConsolidado()) {
             var registrado = registrarVehiculo(esquema);

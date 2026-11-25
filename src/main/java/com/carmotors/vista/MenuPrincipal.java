@@ -16,7 +16,9 @@ public class MenuPrincipal {
         Scanner entrada = new Scanner(System.in);
         PrintStream salida = System.out;
         VistaClientes clientes = new VistaClientes(entrada, salida, new ClienteControlador());
-        VistaServicios servicios = new VistaServicios(entrada, salida, new ServicioControlador());
+        ServicioControlador servicioControlador = new ServicioControlador();
+        VistaServicios servicios = new VistaServicios(entrada, salida, servicioControlador);
+        VistaTiempoEntrega tiempos = new VistaTiempoEntrega(entrada, salida, servicioControlador);
         VistaVehiculos vehiculos = new VistaVehiculos(entrada, salida, new VehiculoControlador());
         InventarioControlador inventarioControlador = new InventarioControlador();
         VistaInventario inventario = new VistaInventario(entrada, salida, inventarioControlador);
@@ -26,7 +28,7 @@ public class MenuPrincipal {
         mostrar(entrada, salida, Map.of(
                 "1", clientes::mostrar, "2", vehiculos::mostrar, "3", servicios::mostrar,
                 "4", inventario::mostrar, "5", proveedores::mostrar,
-                "6", recordatorios::mostrarMenu, "7", facturas::mostrarMenu));
+                "6", recordatorios::mostrarMenu, "7", facturas::mostrarMenu, "8", tiempos::mostrar));
     }
 
     // Cada acción usa la entrada compartida y devuelve el control con 0 o al llegar a EOF.
@@ -41,6 +43,7 @@ public class MenuPrincipal {
                     5. Proveedores
                     6. Recordatorios y Alertas
                     7. Facturación
+                    8. Tiempo Estimado de Entrega
                     0. Salir""");
             salida.print("Opción: ");
             if (!entrada.hasNextLine()) {
@@ -49,9 +52,9 @@ public class MenuPrincipal {
             String opcion = entrada.nextLine().strip();
             switch (opcion) {
                 case "0" -> { return; }
-                case "1", "2", "3", "4", "5", "6", "7" ->
+                case "1", "2", "3", "4", "5", "6", "7", "8" ->
                         abrirVista(rutas.get(opcion), salida);
-                default -> salida.println("Opción inválida. Elija un número entre 0 y 7.");
+                default -> salida.println("Opción inválida. Elija un número entre 0 y 8.");
             }
         }
     }

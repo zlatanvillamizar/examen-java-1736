@@ -7,7 +7,6 @@ import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
 import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
 import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
-
 import java.io.PrintStream;
 import java.math.BigDecimal;
 import java.sql.SQLException;

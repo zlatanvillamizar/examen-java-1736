@@ -19,7 +19,7 @@ class MenuPrincipalTest {
     @Test
     void navegaDesdeMainPorVehiculosServiciosTecnicosYSale() {
         String salida = ejecutarMain("x\n2\nx\n2\n0\n0\n3\n8\n0\n0\n0\n");
-        assertTrue(salida.contains("Opción inválida. Elija un número entre 0 y 7."));
+        assertTrue(salida.contains("Opción inválida. Elija un número entre 0 y 8."));
         assertTrue(salida.contains("Opción inválida. Elija un número entre 0 y 4."));
         assertTrue(salida.contains("ID del vehículo debe ser positivo."));
         int vehiculos = salida.indexOf("=== Vehículos ===");

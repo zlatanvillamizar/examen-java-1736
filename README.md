@@ -1,3 +1,15 @@
+### Examen final <1736> | <tiempo promedio de reparacion>
+Estudiante y grupo: <Zlatan Ricardo Villamizar Fajardo> | <m3>
+Proyecto de origen: <https://github.com/zlatanvillamizar/examen-java-1736.git>
+Acceso: <esquema sql: nueva tabla creada en la linea 182 a la 190
+servicioDAO: cambios realizados de la linea 85 a la 145>
+vista: en la parte de vistaReportes se creo la vista de como se ve el reporte final
+vista x2: en la vistaTiempoEntrega agregue la nueva funcion de tiempo aproximado de entrega
+Clases del examen: <?>
+
+
+
+
 # CarMotors — Sistema de Gestión de Taller
 
 Proyecto académico de Zlatan Ricardo Villamizar Fajardo, Valeria, Crisbely y Marilud. Gestiona clientes, vehículos, órdenes, técnicos, inventario, proveedores, recordatorios y facturación.
@@ -113,6 +125,10 @@ Las nuevas facturas guardan el detalle, precios y datos de presentación en la m
 | Inventario y Proveedores | Vistas activas en las opciones 4 y 5. Incluyen registro, consultas, movimientos de stock y actualización del contacto del proveedor. |
 | Recordatorios y Alertas | Activa en la opción 6. Crea y consulta recordatorios, muestra alertas y permite notificar. |
 | Facturación | Activa en la opción 7. Emite una factura por servicio completado, la consulta y lista facturas. |
+| Tiempo Estimado de Entrega | Activa en la opción 8. Consulta por ID de orden y guarda la primera estimación histórica en MySQL. Suma a la fecha de recepción el promedio de otras órdenes del mismo tipo en estado `Completado` o `Finalizado` con ambas fechas. Si falta historial, muestra como provisional la fecha de entrega registrada en la orden, cuando existe. |
+| Ver Tiempos Promedio de Reparación | Menú principal → 8. Tiempo Estimado de Entrega → 2. Muestra el promedio en días, horas y minutos para Preventivo y Correctivo e indica si algún tipo carece de órdenes elegibles. También se puede abrir desde Servicios y Técnicos → 12. |
+
+En instalaciones existentes, ejecuta [la migración de tiempo de entrega](database/migraciones/002_tiempo_entrega.sql) en el mismo esquema que usa CarMotors. La tabla `tiempo_entrega` guarda una estimación por orden, vinculada a `servicios.id`. Las instalaciones nuevas ya incluyen la tabla en el esquema consolidado.
 
 Facturación cobra únicamente los repuestos consumidos. La consola usa una tasa de impuestos del 0 % para la demostración académica.
 

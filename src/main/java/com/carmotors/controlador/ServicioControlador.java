@@ -4,13 +4,16 @@ import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
 import com.carmotors.servicio.taller.ServicioService;
+import com.carmotors.servicio.taller.ServicioService.EstimacionEntrega;
 import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
 import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
 import com.carmotors.servicio.taller.integracion.ReservaRepuesto;
 
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -39,6 +42,14 @@ public final class ServicioControlador {
 
     public List<Servicio> listarServicios() {
         return servicio.listar();
+    }
+
+    public Map<String, Duration> consultarTiemposPromedioReparacion() throws SQLException {
+        return servicio.calcularTiemposPromedioReparacion();
+    }
+
+    public Optional<EstimacionEntrega> consultarTiempoEntrega(int servicioId) throws SQLException {
+        return servicio.consultarTiempoEntrega(servicioId);
     }
 
     public void actualizarEstado(int servicioId, int estadoId) throws SQLException {

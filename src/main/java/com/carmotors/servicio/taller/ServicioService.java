@@ -7,6 +7,7 @@ import com.carmotors.dao.TecnicoDAO;
 import com.carmotors.modelo.Servicio;
 import com.carmotors.modelo.ServicioTecnico;
 import com.carmotors.modelo.Tecnico;
+import com.carmotors.modelo.TiempoEntrega;
 import com.carmotors.servicio.taller.dominio.IdentificadorServicio;
 import com.carmotors.servicio.taller.dominio.IdentificadorVehiculo;
 import com.carmotors.servicio.taller.integracion.ConsumoRepuesto;
@@ -16,13 +17,17 @@ import com.carmotors.servicios.inventario.InventarioServiciosJdbc;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 public final class ServicioService {
     private final ServicioDAO servicios;
@@ -99,6 +104,44 @@ public final class ServicioService {
 
     public List<Servicio> listar() {
         return consulta.listar();
+    }
+
+    public Map<String, Duration> calcularTiemposPromedioReparacion() throws SQLException {
+        return servicios.listarCompletadosConFechas().stream()
+                .collect(Collectors.groupingBy(ServicioDAO.ServicioConFechas::tipoMantenimiento,
+                        promedioDuraciones()));
+    }
+
+    public record EstimacionEntrega(TiempoEntrega tiempo, boolean provisional) {
+    }
+
+    public Optional<EstimacionEntrega> consultarTiempoEntrega(int servicioId) throws SQLException {
+        Servicio orden = buscarPorId(servicioId)
+                .orElseThrow(() -> new NoSuchElementException("No existe la orden " + servicioId + "."));
+        Optional<TiempoEntrega> guardado = servicios.buscarTiempoEntrega(servicioId);
+        if (guardado.isPresent()) {
+            return guardado.map(tiempo -> new EstimacionEntrega(tiempo, false));
+        }
+        var historial = servicios.listarCompletadosConFechas().stream()
+                .filter(fila -> fila.servicio().mantenimientoTipoId() == orden.mantenimientoTipoId())
+                .filter(fila -> fila.servicio().id() != servicioId)
+                .toList();
+        if (historial.isEmpty()) {
+            return Optional.ofNullable(orden.fechaEntrega())
+                    .map(fecha -> new TiempoEntrega(servicioId, Duration.between(orden.fechaRecepcion(), fecha), fecha))
+                    .map(tiempo -> new EstimacionEntrega(tiempo, true));
+        }
+        Duration duracion = historial.stream().collect(promedioDuraciones());
+        servicios.guardarTiempoEntrega(new TiempoEntrega(servicioId, duracion,
+                orden.fechaRecepcion().plus(duracion)));
+        return servicios.buscarTiempoEntrega(servicioId).map(tiempo -> new EstimacionEntrega(tiempo, false));
+    }
+
+    private static Collector<ServicioDAO.ServicioConFechas, ?, Duration> promedioDuraciones() {
+        return Collectors.collectingAndThen(
+                Collectors.averagingLong(fila -> Duration.between(fila.servicio().fechaRecepcion(),
+                        fila.servicio().fechaEntrega()).toSeconds()),
+                promedio -> Duration.ofSeconds(promedio.longValue()));
     }
 
     public void actualizarEstado(int id, int estadoId) throws SQLException {
